@@ -86,23 +86,31 @@ CREATE TABLE IF NOT EXISTS set_progress (
 );
 
 -- =====================================================================
--- quests — set-übergreifende Quests (z.B. "sammle 15 Tiere")
---   Definition + per-User-Fortschritt in einer Zeile je (user_id, quest_id).
---   user_id = '' (Leerstring) markiert die Vorlage/Definition ohne User.
+-- quest_defs — set-übergreifende Quest-VORLAGEN (z.B. "sammle 15 Tiere")
+--   Reine Definition, ohne User-Bezug.
 -- =====================================================================
-CREATE TABLE IF NOT EXISTS quests (
+CREATE TABLE IF NOT EXISTS quest_defs (
+    quest_id       TEXT PRIMARY KEY,
+    name           TEXT    NOT NULL,
+    description    TEXT,
+    goal_count     INTEGER NOT NULL DEFAULT 1,    -- Zielmenge (z.B. 15)
+    reward_type    TEXT,                          -- z.B. 'hourglasses' | 'currency'
+    reward_amount  INTEGER NOT NULL DEFAULT 0,
+    active         INTEGER NOT NULL DEFAULT 1,    -- 0/1: Quest aktiv
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- =====================================================================
+-- quest_progress — per-User-FORTSCHRITT zu einer Quest-Vorlage
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS quest_progress (
+    user_id         TEXT    NOT NULL,
     quest_id        TEXT    NOT NULL,
-    user_id         TEXT    NOT NULL DEFAULT '',  -- '' = Definition/Vorlage
-    name            TEXT    NOT NULL,
-    description     TEXT,
-    goal_count      INTEGER NOT NULL DEFAULT 1,   -- Zielmenge (z.B. 15)
     progress_count  INTEGER NOT NULL DEFAULT 0,   -- aktueller Stand des Users
-    reward_type     TEXT,                         -- z.B. 'hourglasses' | 'currency'
-    reward_amount   INTEGER NOT NULL DEFAULT 0,
     completed       INTEGER NOT NULL DEFAULT 0,   -- 0/1
     reward_claimed  INTEGER NOT NULL DEFAULT 0,   -- 0/1
-    active          INTEGER NOT NULL DEFAULT 1,   -- 0/1: Quest aktiv
-    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (user_id, quest_id)
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, quest_id),
+    FOREIGN KEY (quest_id) REFERENCES quest_defs (quest_id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_quests_user ON quests (user_id);
+CREATE INDEX IF NOT EXISTS idx_questprogress_quest ON quest_progress (quest_id);

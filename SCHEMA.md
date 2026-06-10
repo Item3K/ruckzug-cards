@@ -76,26 +76,27 @@ Sanduhren sind das Platzhalter-Item zum Öffnen von Packs (ROADMAP §10).
 | `completed_at` | TEXT | Abschlusszeit |
 | | | **PK = (`user_id`, `set_id`)** |
 
-### `quests` — set-übergreifende Quests
-Definition **und** per-User-Fortschritt in einer Tabelle. Eine Zeile mit
-`user_id = ''` (Leerstring) ist die **Vorlage/Definition** der Quest; pro User
-entsteht später eine eigene Zeile mit demselben `quest_id` und Fortschritt.
+### `quest_defs` — set-übergreifende Quest-Vorlagen
+Reine **Definitionen** (ohne User-Bezug), z.B. „sammle 15 Tiere".
 | Spalte | Typ | Bedeutung |
 |---|---|---|
-| `quest_id` | TEXT | Slug der Quest |
-| `user_id` | TEXT | Discord-ID, **`''` = Definition/Vorlage** |
+| `quest_id` | TEXT PK | Slug der Quest, z.B. `quest_tiere_sammler` |
 | `name` | TEXT | Anzeigename |
-| `description` | TEXT | z.B. „sammle 15 Tiere" |
-| `goal_count` | INTEGER | Zielmenge |
-| `progress_count` | INTEGER | aktueller Stand des Users |
+| `description` | TEXT | z.B. „Sammle 15 verschiedene Tiere." |
+| `goal_count` | INTEGER | Zielmenge (z.B. 15) |
 | `reward_type` | TEXT | z.B. `hourglasses` / `currency` |
 | `reward_amount` | INTEGER | Höhe der Belohnung |
-| `completed` | INTEGER 0/1 | erfüllt |
-| `reward_claimed` | INTEGER 0/1 | Belohnung abgeholt |
 | `active` | INTEGER 0/1 | Quest aktiv |
 | `created_at` | TEXT | Anlagezeit |
-| | | **PK = (`user_id`, `quest_id`)** |
 
-> Hinweis: Das Quest-Modell ist bewusst einfach gehalten (eine Tabelle).
-> Sollte sich das in Phase 5 als zu eng erweisen, kann es non-destruktiv in
-> `quest_defs` + `quest_progress` aufgeteilt werden.
+### `quest_progress` — per-User-Fortschritt zu einer Quest
+Pro User und Quest **eine** Zeile; verweist auf die Vorlage in `quest_defs`.
+| Spalte | Typ | Bedeutung |
+|---|---|---|
+| `user_id` | TEXT | Discord-ID |
+| `quest_id` | TEXT FK→`quest_defs` | Quest |
+| `progress_count` | INTEGER | aktueller Stand des Users |
+| `completed` | INTEGER 0/1 | erfüllt |
+| `reward_claimed` | INTEGER 0/1 | Belohnung abgeholt |
+| `updated_at` | TEXT | letzte Änderung |
+| | | **PK = (`user_id`, `quest_id`)** |

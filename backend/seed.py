@@ -44,6 +44,13 @@ CARDS = [
     {"card_id": "card_wal",    "set_id": "set_tiere", "name": "Blauwal","rarity": "legendary", "pack_exclusive_to": "pack_meer", "asset": "cards/wal.webp"},
 ]
 
+# Quest-VORLAGEN (ohne User-Bezug). Per-User-Fortschritt entsteht später in
+# quest_progress, sobald echte User mitspielen — daher hier nur Definitionen.
+QUEST_DEFS = [
+    {"quest_id": "quest_tiere_sammler", "name": "Tier-Sammler", "description": "Sammle 15 verschiedene Tiere.",
+     "goal_count": 15, "reward_type": "hourglasses", "reward_amount": 3, "active": 1},
+]
+
 
 def seed() -> None:
     with db.connection() as conn:
@@ -63,6 +70,12 @@ def seed() -> None:
             "VALUES (:card_id, :set_id, :name, :rarity, :pack_exclusive_to, :asset)",
             CARDS,
         )
+        conn.executemany(
+            "INSERT OR REPLACE INTO quest_defs "
+            "(quest_id, name, description, goal_count, reward_type, reward_amount, active) "
+            "VALUES (:quest_id, :name, :description, :goal_count, :reward_type, :reward_amount, :active)",
+            QUEST_DEFS,
+        )
 
     print("Seed eingespielt:")
     print(f"  Sets : 1  ({SET['name']})")
@@ -70,6 +83,7 @@ def seed() -> None:
     base = sum(1 for c in CARDS if c['pack_exclusive_to'] is None)
     excl = len(CARDS) - base
     print(f"  Karten: {len(CARDS)}  ({base} Basis, {excl} pack-exklusiv)")
+    print(f"  Quest-Vorlagen: {len(QUEST_DEFS)}  ({', '.join(q['name'] for q in QUEST_DEFS)})")
 
 
 if __name__ == "__main__":

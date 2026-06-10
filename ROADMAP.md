@@ -131,7 +131,9 @@ eine neue Channel-ID dazu (Sammlungs-Channel) + OAuth-Secrets.
 - `sets` — Set-Definitionen (set_id, name, total_cards …)
 - `packs` — Pack-Definitionen (pack_id, set_id, name, asset …)
 - `user_cards` — Besitz (user_id, card_id, count)
-- `set_progress` / `quests` — Fortschritt & set-übergreifende Quests
+- `set_progress` — Fortschritt pro User & Set
+- `quest_defs` / `quest_progress` — set-übergreifende Quests: Vorlagen (`quest_defs`,
+  z.B. „sammle 15 Tiere") getrennt vom per-User-Fortschritt (`quest_progress`)
 
 WAL aktivieren: `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`
 
