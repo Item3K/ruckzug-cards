@@ -32,11 +32,40 @@ export class PackViewer {
     this.action = null;
     this.isOpen = false;        // wurde die Aufreiß-Animation schon abgespielt?
     this._loadToken = 0;        // gegen Race-Conditions bei schnellem Pack-Wechsel
+    this._onFinishedCb = null;  // Callback, wenn die Aufreiß-Animation durch ist (Phase 4b)
+    this.modelSize = new THREE.Vector3(1, 1, 1); // Maße des geladenen Packs
+    this.cameraDist = 5;        // gewählter Kamera-Abstand fürs Framing
   }
 
   /** Vom Render-Loop pro Frame aufgerufen. */
   update(delta) {
     if (this.mixer) this.mixer.update(delta);
+  }
+
+  /** Dauer der Aufreiß-Animation in Sekunden (0, falls keine Animation). */
+  getClipDuration() {
+    return this.action ? this.action.getClip().duration : 0;
+  }
+
+  /** Registriert einen Callback, der feuert, wenn die Aufreiß-Animation endet. */
+  onFinished(cb) {
+    this._onFinishedCb = cb;
+  }
+
+  /** Setzt die Deckkraft aller Pack-Materialien (fürs Ausblenden in Phase 4b). */
+  setOpacity(opacity) {
+    if (!this.model) return;
+    this.model.traverse((node) => {
+      if (!node.isMesh) return;
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      for (const mat of mats) {
+        if (!mat) continue;
+        mat.transparent = true;
+        mat.opacity = opacity;
+        mat.depthWrite = opacity >= 0.99; // bei voller Deckkraft normal schreiben
+      }
+    });
+    this.model.visible = opacity > 0.001;
   }
 
   /**
@@ -71,6 +100,10 @@ export class PackViewer {
       this.action.play();
       this.action.paused = true;
       this.mixer.setTime(0);
+      // 'finished' feuert, wenn die einmalige Animation durchgelaufen ist.
+      this.mixer.addEventListener('finished', () => {
+        if (this._onFinishedCb) this._onFinishedCb();
+      });
     }
     this.isOpen = false;
   }
@@ -84,8 +117,8 @@ export class PackViewer {
     this.action.setLoop(THREE.LoopOnce, 1);
     this.action.clampWhenFinished = true;
     this.action.play();
-    // TODO(Phase 4b): hier Beam/Partikel/Sound/Reveal triggern — entweder relativ
-    // zum Start zeitgesteuert oder über mixer.addEventListener('finished', ...).
+    // Phase 4b: Beam/Hide/Reveal werden von revealSequence.js orchestriert —
+    // zeitgesteuert ab hier (Beam mittendrin) bzw. über onFinished() am Ende.
   }
 
   /** Entfernt aktuelles Modell aus der Szene und gibt GPU-Ressourcen frei. */
@@ -113,12 +146,14 @@ export class PackViewer {
 
     // Zentrieren: Pack-Mittelpunkt in den Ursprung schieben.
     model.position.sub(center);
+    this.modelSize = size.clone();
 
     // Kamera-Abstand so wählen, dass das Pack komfortabel ins Bild passt.
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = (this.camera.fov * Math.PI) / 180;
     let dist = (maxDim / 2) / Math.tan(fov / 2);
     dist *= 1.6; // etwas Luft drumherum
+    this.cameraDist = dist;
 
     this.camera.position.set(0, 0, dist);
     this.camera.near = dist / 100;

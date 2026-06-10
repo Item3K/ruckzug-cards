@@ -14,8 +14,8 @@ from __future__ import annotations
 HOURGLASS_COST: int = 1
 
 # --- Zuglogik ----------------------------------------------------------------
-# Wie viele Karten ein Pack ausgibt.
-CARDS_PER_PACK: int = 5
+# Wie viele Karten ein Pack ausgibt (TCG-Pocket-Stil: 10 Karten pro Pack).
+CARDS_PER_PACK: int = 10
 
 # Bekannte Raritäten, von niedrig nach hoch (Reihenfolge bestimmt "beste Karte").
 RARITY_ORDER: tuple[str, ...] = ("common", "rare", "epic", "legendary")

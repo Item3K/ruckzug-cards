@@ -1,0 +1,131 @@
+// Light-Beam nach ROADMAP §6:
+// - Plane mit Beam-PNG, HINTER dem Pack (Ursprung verdeckt), Spitze am Riss.
+// - AdditiveBlending + depthWrite:false, zur Kamera ausgerichtet (Billboard).
+// - Im Riss-Moment Opacity + Skalierung hoch, dann abblenden.
+// Stufen kommen vom Server (beam_stage): normal = kein/kaum Beam,
+// selten = weißer Beam, jackpot = goldener Beam (heller, größer).
+
+import * as THREE from 'three';
+
+const BEAM_TEX = {
+  selten: '/textures/beam_weiss_4k.png',
+  jackpot: '/textures/beam_gold_4k.png',
+};
+
+// Pro Stufe: Spitzen-Deckkraft und Skalierungs-Faktor (jackpot kräftiger).
+const STAGE_PARAMS = {
+  normal: { peak: 0.0, scale: 1.0 }, // kaum/kein Beam
+  selten: { peak: 0.85, scale: 1.0 },
+  jackpot: { peak: 1.0, scale: 1.25 },
+};
+
+const DURATION = 1.4; // Sekunden gesamtes Auf-/Abblenden
+
+export class Beam {
+  constructor(scene, camera) {
+    this.scene = scene;
+    this.camera = camera;
+    this.mesh = null;
+    this.material = null;
+    this._textures = {};
+    this._loader = new THREE.TextureLoader();
+    this.t = 0;
+    this.active = false;
+    this.stage = 'normal';
+    this._baseScale = 1;
+    this._params = STAGE_PARAMS.normal;
+  }
+
+  _getTexture(stage) {
+    if (!this._textures[stage]) {
+      const tex = this._loader.load(BEAM_TEX[stage]);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this._textures[stage] = tex;
+    }
+    return this._textures[stage];
+  }
+
+  /**
+   * Beam vorbereiten und starten.
+   * @param {string} stage  'normal' | 'selten' | 'jackpot'
+   * @param {THREE.Vector3} ripPosition  Weltposition des Risses (Beam-Spitze)
+   * @param {number} packHeight  Höhe des Packs (zur Beam-Größe)
+   */
+  show(stage, ripPosition, packHeight) {
+    this.dispose();
+    this.stage = stage;
+    this._params = STAGE_PARAMS[stage] || STAGE_PARAMS.normal;
+    if (!BEAM_TEX[stage] || this._params.peak <= 0) {
+      // Stufe "normal": kein Beam.
+      this.active = false;
+      return;
+    }
+
+    const height = packHeight * 3.0 * this._params.scale;
+    const width = height * 0.6;
+    const geo = new THREE.PlaneGeometry(width, height);
+    // Pivot an die Spitze legen: Geometrie so verschieben, dass die untere
+    // Kante (Spitze des Kegel-PNG) im Ursprung des Mesh sitzt -> Spitze bleibt
+    // beim Billboarden am Riss.
+    geo.translate(0, height / 2, 0);
+
+    this.material = new THREE.MeshBasicMaterial({
+      map: this._getTexture(stage),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,   // §6
+      depthTest: true,     // Pack verdeckt den Beam, bis es aufreißt
+      opacity: 0,
+      side: THREE.DoubleSide,
+      toneMapped: false,   // Beam soll knallen, nicht vom Tone-Mapping gedämpft
+    });
+
+    this.mesh = new THREE.Mesh(geo, this.material);
+    // Spitze an den Riss, leicht HINTER das Pack (kleineres z = weg von der Kamera).
+    this.mesh.position.copy(ripPosition);
+    this.mesh.position.z -= packHeight * 0.15;
+    this.mesh.renderOrder = -1; // hinter den Karten/Pack einsortiert
+    this.scene.add(this.mesh);
+
+    this._baseScale = 1;
+    this.t = 0;
+    this.active = true;
+  }
+
+  update(delta) {
+    if (!this.active || !this.mesh) return;
+    this.t += delta;
+    const p = Math.min(this.t / DURATION, 1);
+
+    // Billboard: immer zur Kamera ausrichten (Spitze bleibt durch Pivot am Riss).
+    this.mesh.quaternion.copy(this.camera.quaternion);
+
+    // Opacity: schnell auf (Riss-Moment), dann langsam ab.
+    let opacity;
+    if (p < 0.2) opacity = (p / 0.2) * this._params.peak;
+    else opacity = this._params.peak * (1 - (p - 0.2) / 0.8);
+    this.material.opacity = Math.max(0, opacity);
+
+    // Skalierung: von klein auf groß wachsen lassen.
+    const s = (0.6 + 0.6 * p) * this._params.scale;
+    this.mesh.scale.set(s, s, s);
+
+    if (p >= 1) {
+      this.active = false;
+      this.mesh.visible = false;
+    }
+  }
+
+  dispose() {
+    this.active = false;
+    if (this.mesh) {
+      this.scene.remove(this.mesh);
+      this.mesh.geometry.dispose();
+      this.mesh = null;
+    }
+    if (this.material) {
+      this.material.dispose();
+      this.material = null;
+    }
+  }
+}

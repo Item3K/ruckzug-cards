@@ -12,8 +12,6 @@ body {
   background: #0b0d12;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: #e5e7eb;
-  /* Browser-Gesten (Pull-to-Refresh, Doppeltipp-Zoom) auf dem Canvas unterdrücken,
-     damit Touch-Drehen sauber funktioniert. */
   overscroll-behavior: none;
 }
 
@@ -22,7 +20,7 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
-  touch-action: none; /* wichtig: Touch-Events gehen an OrbitControls, nicht ans Scrollen */
+  touch-action: none; /* Touch-Events an OrbitControls / Kartenstapel, nicht ans Scrollen */
 }
 
 canvas {
@@ -33,10 +31,11 @@ canvas {
 .ui {
   position: fixed;
   inset: 0;
-  pointer-events: none; /* Overlay-Hintergrund lässt Dreh-Gesten durch */
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  align-items: center;
   padding: env(safe-area-inset-top, 12px) 12px env(safe-area-inset-bottom, 12px);
 }
 
@@ -51,7 +50,7 @@ canvas {
 .pack-btn {
   pointer-events: auto;
   padding: 10px 16px;
-  min-height: 44px; /* Touch-Zielgröße */
+  min-height: 44px;
   border: 1px solid #334155;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.7);
@@ -72,26 +71,47 @@ canvas {
   color: #fff;
 }
 
+.hint {
+  pointer-events: none;
+  font-size: 16px;
+  color: #cbd5e1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  text-align: center;
+}
+
+.status {
+  pointer-events: none;
+  font-size: 15px;
+  color: #94a3b8;
+  min-height: 1.2em;
+  text-align: center;
+}
+
 .actions {
   pointer-events: none;
   display: flex;
   justify-content: center;
+  gap: 10px;
+}
+
+.open-btn,
+.back-btn {
+  pointer-events: auto;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.1s, filter 0.15s;
 }
 
 .open-btn {
-  pointer-events: auto;
   padding: 16px 40px;
   min-height: 56px;
-  border: none;
-  border-radius: 999px;
   background: linear-gradient(180deg, #f59e0b, #d97706);
   color: #1c1917;
   font-size: 19px;
-  font-weight: 700;
   letter-spacing: 0.02em;
-  cursor: pointer;
   box-shadow: 0 8px 24px rgba(217, 119, 6, 0.35);
-  transition: transform 0.1s, filter 0.15s;
 }
 
 .open-btn:hover {
@@ -106,4 +126,46 @@ canvas {
   filter: grayscale(0.6) brightness(0.8);
   cursor: default;
   box-shadow: none;
+}
+
+.back-btn {
+  padding: 14px 28px;
+  min-height: 52px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  font-size: 16px;
+}
+
+.back-btn:hover {
+  border-color: #94a3b8;
+}
+
+/* --- Modus-Sichtbarkeit --- */
+/* Standard: Auswahl. Picker + Öffnen sichtbar, Back versteckt. */
+.ui[data-mode='select'] .back-btn,
+.ui[data-mode='select'] .hint {
+  display: none;
+}
+
+/* Öffnen läuft: nichts Bedienbares außer Status. */
+.ui[data-mode='opening'] .pack-picker,
+.ui[data-mode='opening'] .open-btn,
+.ui[data-mode='opening'] .back-btn,
+.ui[data-mode='opening'] .hint {
+  display: none;
+}
+
+/* Reveal: nur Hinweis + Fortschritt. */
+.ui[data-mode='reveal'] .pack-picker,
+.ui[data-mode='reveal'] .open-btn,
+.ui[data-mode='reveal'] .back-btn {
+  display: none;
+}
+
+/* Fertig: Status + Zurück-Button. */
+.ui[data-mode='done'] .pack-picker,
+.ui[data-mode='done'] .open-btn,
+.ui[data-mode='done'] .hint {
+  display: none;
 }
