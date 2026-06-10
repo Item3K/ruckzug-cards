@@ -16,6 +16,13 @@ export const CARD_VIEW_HEIGHT = 2.4;  // Zielhöhe einer Karte in Weltunits
 export const DRAG_SENSITIVITY = 0.01; // Radiant pro Pixel horizontaler Bewegung
 export const TAP_THRESHOLD_PX = 8;    // weniger Bewegung = Tap (statt Drag)
 
+// --- Pack-Schwung (Momentum/Inertia, NUR Pack — nicht der Stack) ------------
+// Reibung als exponentielle Abklingrate pro Sekunde: höher = bremst schneller,
+// niedriger = dreht länger aus. Schnelles Ziehen -> höhere Anfangsgeschwindigkeit
+// -> längeres Ausdrehen.
+export const PACK_SPIN_FRICTION = 1.8;
+export const PACK_SPIN_MAX_SPEED = 14; // rad/s Deckel, gegen absurd schnelle Spins
+
 // --- Card-Stack -------------------------------------------------------------
 export const STACK_MAX_ANGLE_DEG = 30;            // ± Grenze fürs Stapel-Drehen
 export const STACK_MAX_ANGLE_RAD = THREE.MathUtils.degToRad(STACK_MAX_ANGLE_DEG);

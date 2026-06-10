@@ -7,7 +7,12 @@
 // Tap (kaum Bewegung) löst onTap() aus.
 
 import * as THREE from 'three';
-import { DRAG_SENSITIVITY, TAP_THRESHOLD_PX } from './config.js';
+import {
+  DRAG_SENSITIVITY,
+  TAP_THRESHOLD_PX,
+  PACK_SPIN_FRICTION,
+  PACK_SPIN_MAX_SPEED,
+} from './config.js';
 
 export class DragRotator {
   constructor(domElement) {
@@ -19,9 +24,10 @@ export class DragRotator {
     this.damping = 0;
     this.onTap = null;
 
-    this.vel = 0;             // Winkelgeschwindigkeit (für die Feder)
+    this.vel = 0;             // Winkelgeschwindigkeit (Feder bzw. Schwung)
     this.dragging = false;
     this._start = null;
+    this._lastMove = null;    // letzte Bewegung (für Momentum-Berechnung)
 
     this._down = this._down.bind(this);
     this._move = this._move.bind(this);
@@ -56,6 +62,7 @@ export class DragRotator {
     if (!this.target) return;
     this.dragging = true;
     this.vel = 0;
+    this._lastMove = null;
     this._start = { x: e.clientX, y: e.clientY, rot: this.target.rotation.y, moved: 0 };
   }
 
@@ -66,6 +73,21 @@ export class DragRotator {
     this._start.moved = Math.max(this._start.moved, Math.hypot(dx, dy));
     let r = this._start.rot + dx * DRAG_SENSITIVITY; // nur horizontal -> Y-Achse
     if (this.clampRad != null) r = THREE.MathUtils.clamp(r, -this.clampRad, this.clampRad);
+
+    // Momentum nur für freie Objekte (Pack). Beim Stack (spring) NICHT tracken,
+    // damit die Feder unverändert aus der Ruhe zurückschnappt.
+    if (!this.spring) {
+      const now = performance.now();
+      if (this._lastMove) {
+        const dt = (now - this._lastMove.time) / 1000;
+        if (dt > 0) {
+          const v = (r - this._lastMove.rot) / dt;
+          this.vel = THREE.MathUtils.clamp(v, -PACK_SPIN_MAX_SPEED, PACK_SPIN_MAX_SPEED);
+        }
+      }
+      this._lastMove = { time: now, rot: r };
+    }
+
     this.target.rotation.y = r;
   }
 
@@ -74,20 +96,39 @@ export class DragRotator {
     this.dragging = false;
     const tap = this._start && this._start.moved < TAP_THRESHOLD_PX;
     this._start = null;
-    if (tap && this.onTap) this.onTap();
+    // Nach dem Loslassen aus dem Stand (kurze Pause vor Release) -> kein Spin.
+    if (!this.spring && (!this._lastMove || performance.now() - this._lastMove.time > 100)) {
+      this.vel = 0;
+    }
+    if (tap) {
+      this.vel = 0; // Tap dreht nicht nach
+      if (this.onTap) this.onTap();
+    }
   }
 
-  /** Pro Frame: Feder zur Mitte (nur wenn nicht gezogen und spring aktiv). */
+  /** Pro Frame: Feder zur Mitte (Stack) ODER freies Ausdrehen mit Reibung (Pack). */
   update(delta) {
-    if (!this.target || this.dragging || !this.spring) return;
+    if (!this.target || this.dragging) return;
     const d = Math.min(delta, 1 / 30); // Stabilität bei Frame-Drops
-    const x = this.target.rotation.y;
-    const acc = -this.stiffness * x - this.damping * this.vel;
-    this.vel += acc * d;
-    this.target.rotation.y = x + this.vel * d;
-    if (Math.abs(this.target.rotation.y) < 1e-4 && Math.abs(this.vel) < 1e-4) {
-      this.target.rotation.y = 0;
-      this.vel = 0;
+
+    if (this.spring) {
+      // Stack: unterdämpfte Feder zurück zur Mitte (0°).
+      const x = this.target.rotation.y;
+      const acc = -this.stiffness * x - this.damping * this.vel;
+      this.vel += acc * d;
+      this.target.rotation.y = x + this.vel * d;
+      if (Math.abs(this.target.rotation.y) < 1e-4 && Math.abs(this.vel) < 1e-4) {
+        this.target.rotation.y = 0;
+        this.vel = 0;
+      }
+    } else {
+      // Pack: mit Schwung weiterdrehen, exponentiell ausklingen.
+      if (Math.abs(this.vel) < 1e-4) {
+        this.vel = 0;
+        return;
+      }
+      this.target.rotation.y += this.vel * d;
+      this.vel *= Math.exp(-PACK_SPIN_FRICTION * d);
     }
   }
 }

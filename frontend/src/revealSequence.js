@@ -52,12 +52,14 @@ export class RevealSequence {
       this.active = false;
       this.rotator.attach(this.viewer.getRotationTarget()); // Pack wieder frei drehbar
       this.ui.setMode('select');
-      this.ui.setStatus('Öffnen');
-      this.ui.setHint(
+      // In den sichtbaren Status schreiben (der Hint ist im select-Modus ausgeblendet),
+      // damit ein Fehler NIE wie "nichts passiert" aussieht.
+      this.ui.setStatus(
         e.status === 400
-          ? 'Keine Sanduhren mehr — über /api/dev/give-hourglasses nachfüllen.'
-          : `Fehler: ${e.message}`,
+          ? 'Keine Sanduhren — in /docs via /api/dev/give-hourglasses nachfüllen'
+          : `Fehler beim Öffnen: ${e.message}`,
       );
+      this.ui.setHint('');
       return;
     }
 
