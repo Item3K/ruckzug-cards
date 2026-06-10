@@ -1,56 +1,48 @@
-// RuckZUG Cards — Frontend-Einstieg (Phase 0)
-// Ziel dieser Phase: NUR eine leere 3D-Szene rendern. Noch keine Pack-Logik,
-// kein GLB-Loader, keine Spiel-Mechanik (siehe ROADMAP §8, Phase 0 "Tabu").
+// RuckZUG Cards — Frontend-Einstieg.
+// Phase 4a: Pack-GLB laden, drehbar (Maus + Touch), auf Knopfdruck einmal
+// aufreißen. NOCH KEIN Beam/Partikel/Karten-Reveal (das ist Phase 4b).
 
-import * as THREE from 'three';
 import './style.css';
+import { createScene } from './scene.js';
+import { PackViewer } from './packViewer.js';
+import { createUI } from './ui.js';
+
+// Die 5 Packs (Dateien liegen in frontend/public/models/).
+const PACKS = [
+  { id: 'green',   label: 'Grün',      file: '/models/pack_green.glb' },
+  { id: 'pink',    label: 'Pink',      file: '/models/pack_pink.glb' },
+  { id: 'purple',  label: 'Lila',      file: '/models/pack_purple.glb' },
+  { id: 'rainbow', label: 'Regenbogen', file: '/models/pack_rainbow.glb' },
+  { id: 'red',     label: 'Rot',       file: '/models/pack_red.glb' },
+];
+const DEFAULT_PACK = PACKS[0]; // pack_green.glb
 
 const app = document.querySelector('#app');
 
-// --- Renderer ---
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-app.appendChild(renderer.domElement);
+const { scene, camera, controls, onFrame, start } = createScene(app);
+const viewer = new PackViewer(scene, camera, controls);
+onFrame((delta) => viewer.update(delta));
 
-// --- Szene & Kamera ---
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b0d12);
-
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100,
-);
-camera.position.set(0, 0, 5);
-
-// --- Licht (damit man später überhaupt etwas sieht) ---
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambient);
-
-const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-dir.position.set(2, 3, 4);
-scene.add(dir);
-
-// Hilfs-Gitter, damit die "leere" Szene sichtbar nicht leer wirkt.
-// Platzhalter — fliegt raus, sobald in Phase 4 das echte Pack geladen wird.
-const grid = new THREE.GridHelper(10, 10, 0x334155, 0x1e293b);
-scene.add(grid);
-
-// --- Resize-Handling ---
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+const ui = createUI({
+  packs: PACKS,
+  initialId: DEFAULT_PACK.id,
+  onSelectPack: (file, id) => loadPack(file, id),
+  onOpen: () => viewer.playOpen(),
 });
 
-// --- Render-Loop ---
-function animate() {
-  requestAnimationFrame(animate);
-  renderer.render(scene, camera);
+async function loadPack(file, id) {
+  ui.setActivePack(id);
+  ui.setOpenEnabled(false);
+  ui.setStatus('Lädt …');
+  try {
+    await viewer.load(file);
+    ui.setStatus('Öffnen');
+    ui.setOpenEnabled(true);
+  } catch (err) {
+    console.error('Pack konnte nicht geladen werden:', err);
+    ui.setStatus('Fehler');
+  }
 }
-animate();
 
-// eslint-disable-next-line no-console
-console.log('RuckZUG Cards Frontend — leere Three.js-Szene läuft (Phase 0).');
+start();
+loadPack(DEFAULT_PACK.file, DEFAULT_PACK.id);
