@@ -51,6 +51,13 @@ QUEST_DEFS = [
      "goal_count": 15, "reward_type": "hourglasses", "reward_amount": 3, "active": 1},
 ]
 
+# Test-User mit Sanduhren, damit man /api/open-pack lokal sofort testen kann.
+# INSERT OR REPLACE setzt den Bestand bei jedem Seed-Lauf auf diesen Baseline-Wert.
+# (Echte User entstehen später per OAuth in Phase 3b.)
+TEST_USERS = [
+    {"user_id": "test_user_1", "count": 10},
+]
+
 
 def seed() -> None:
     with db.connection() as conn:
@@ -76,6 +83,11 @@ def seed() -> None:
             "VALUES (:quest_id, :name, :description, :goal_count, :reward_type, :reward_amount, :active)",
             QUEST_DEFS,
         )
+        conn.executemany(
+            "INSERT OR REPLACE INTO hourglasses (user_id, count, updated_at) "
+            "VALUES (:user_id, :count, datetime('now'))",
+            TEST_USERS,
+        )
 
     print("Seed eingespielt:")
     print(f"  Sets : 1  ({SET['name']})")
@@ -84,6 +96,8 @@ def seed() -> None:
     excl = len(CARDS) - base
     print(f"  Karten: {len(CARDS)}  ({base} Basis, {excl} pack-exklusiv)")
     print(f"  Quest-Vorlagen: {len(QUEST_DEFS)}  ({', '.join(q['name'] for q in QUEST_DEFS)})")
+    users_desc = ', '.join(f"{u['user_id']}={u['count']} Sanduhren" for u in TEST_USERS)
+    print(f"  Test-User: {len(TEST_USERS)}  ({users_desc})")
 
 
 if __name__ == "__main__":
