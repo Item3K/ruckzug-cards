@@ -1,0 +1,36 @@
+// Zentrale Tuning-Konstanten für Phase 4b (Steuerung/Optik).
+// Alles, was man zum Justieren anfassen will, steht HIER an einer Stelle.
+
+import * as THREE from 'three';
+
+// --- Kamera (steht FEST, kein Zoom) -----------------------------------------
+export const CAMERA_FOV = 45;
+export const CAMERA_DISTANCE = 6.0;   // fester Abstand zur Mitte (Sweet-Spot)
+
+// Alle Objekte werden auf diese Höhen normiert, damit die feste Kamera für
+// jedes Pack und den Stapel gleich gut passt (formatfüllend, ganz im Bild).
+export const PACK_VIEW_HEIGHT = 3.4;  // Zielhöhe des Packs in Weltunits
+export const CARD_VIEW_HEIGHT = 2.4;  // Zielhöhe einer Karte in Weltunits
+
+// --- Drag-Drehen (Objekte rotieren, nicht die Kamera) -----------------------
+export const DRAG_SENSITIVITY = 0.01; // Radiant pro Pixel horizontaler Bewegung
+export const TAP_THRESHOLD_PX = 8;    // weniger Bewegung = Tap (statt Drag)
+
+// --- Card-Stack -------------------------------------------------------------
+export const STACK_MAX_ANGLE_DEG = 30;            // ± Grenze fürs Stapel-Drehen
+export const STACK_MAX_ANGLE_RAD = THREE.MathUtils.degToRad(STACK_MAX_ANGLE_DEG);
+// Feder zum Zurückschnappen zur Mitte (leicht unterdämpft = minimales Nachwippen).
+export const STACK_SPRING_STIFFNESS = 130; // höher = schneller/härter
+export const STACK_SPRING_DAMPING = 13;    // niedriger = mehr Nachwippen
+// Minimaler Tiefen-Versatz pro Karte (× Kartenhöhe). Fast deckungsgleich;
+// die Ränder dahinter sieht man erst, wenn man den Stapel seitlich dreht.
+export const CARD_STACK_DEPTH = 0.02;
+
+// --- Reveal-Bewegung (Karte nach vorn holen / wegschieben) ------------------
+export const PRESENT_FORWARD = 0.7;   // × Kartenhöhe Richtung Kamera (vor den Stapel)
+export const PRESENT_UP = 0.1;        // × Kartenhöhe nach oben
+
+// --- Beam -------------------------------------------------------------------
+// Höhe des Risses (= Beam-Spitze) über der Pack-Mitte, × Pack-Höhe.
+// War 0.35 (zu hoch) -> deutlich gesenkt.
+export const BEAM_RIP_HEIGHT_FACTOR = 0.12;

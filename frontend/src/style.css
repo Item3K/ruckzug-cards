@@ -20,7 +20,7 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
-  touch-action: none; /* Touch-Events an OrbitControls / Kartenstapel, nicht ans Scrollen */
+  touch-action: none; /* Touch-Events ans Drag-Drehen, nicht ans Scrollen/Zoomen */
 }
 
 canvas {

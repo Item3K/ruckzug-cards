@@ -61,8 +61,8 @@ export class Beam {
       return;
     }
 
-    const height = packHeight * 3.0 * this._params.scale;
-    const width = height * 0.6;
+    const height = packHeight * 2.2 * this._params.scale;
+    const width = height * 0.5;
     const geo = new THREE.PlaneGeometry(width, height);
     // Pivot an die Spitze legen: Geometrie so verschieben, dass die untere
     // Kante (Spitze des Kegel-PNG) im Ursprung des Mesh sitzt -> Spitze bleibt

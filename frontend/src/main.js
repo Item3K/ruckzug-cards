@@ -1,6 +1,6 @@
 // RuckZUG Cards — Frontend-Einstieg.
 // Phase 4a: Pack laden, drehen, aufreißen.
-// Phase 4b: Beam + Karten-Reveal (Stapel, durchklicken) — Daten vom Server.
+// Phase 4b: feste Kamera + Objekte rotieren, Beam, Karten-Reveal (vorne/hinten).
 
 import './style.css';
 import { createScene } from './scene.js';
@@ -10,11 +10,10 @@ import { Beam } from './beam.js';
 import { CardStack } from './cardStack.js';
 import { RevealSequence } from './revealSequence.js';
 import { TweenManager } from './tween.js';
+import { DragRotator } from './dragRotator.js';
 
-// Die 5 visuellen Packs (GLBs in frontend/public/models/).
-// backendPackId: welches Pack im Backend geöffnet wird (Phase 3a-Seed kennt nur
-// pack_wald + pack_meer). TODO: echtes Mapping visuelles Pack <-> Set/Pack im
-// Backend, sobald die Sets/Packs final sind.
+// Visuelle Packs (GLBs). backendPackId: welches Pack im Backend geöffnet wird
+// (3a-Seed kennt nur pack_wald + pack_meer). TODO: echtes Mapping, wenn Sets final.
 const PACKS = [
   { id: 'green',   label: 'Grün',       file: '/models/pack_green.glb',   backendPackId: 'pack_wald' },
   { id: 'pink',    label: 'Pink',       file: '/models/pack_pink.glb',    backendPackId: 'pack_wald' },
@@ -25,20 +24,20 @@ const PACKS = [
 const DEFAULT_PACK = PACKS[0];
 
 const app = document.querySelector('#app');
-
-const { scene, camera, controls, renderer, onFrame, start } = createScene(app);
+const { scene, camera, renderer, onFrame, start } = createScene(app);
 
 const tweens = new TweenManager();
-const viewer = new PackViewer(scene, camera, controls);
+const rotator = new DragRotator(renderer.domElement);
+const viewer = new PackViewer(scene);
 const beam = new Beam(scene, camera);
-const cardStack = new CardStack(scene, camera, renderer.domElement, tweens);
+const cardStack = new CardStack(scene, camera, tweens);
 
-// Ein Render-Loop treibt alles an.
 onFrame((delta) => {
   viewer.update(delta);
   tweens.update(delta);
   beam.update(delta);
   cardStack.update(delta);
+  rotator.update(delta);
 });
 
 let currentPack = DEFAULT_PACK;
@@ -46,23 +45,12 @@ let currentPack = DEFAULT_PACK;
 const ui = createUI({
   packs: PACKS,
   initialId: DEFAULT_PACK.id,
-  onSelectPack: (id) => {
-    const pack = PACKS.find((p) => p.id === id) || DEFAULT_PACK;
-    loadPack(pack);
-  },
+  onSelectPack: (id) => loadPack(PACKS.find((p) => p.id === id) || DEFAULT_PACK),
   onOpen: () => reveal.start(currentPack.backendPackId),
   onBack: () => backToSelection(),
 });
 
-const reveal = new RevealSequence({
-  camera,
-  controls,
-  viewer,
-  beam,
-  cardStack,
-  tweens,
-  ui,
-});
+const reveal = new RevealSequence({ viewer, beam, cardStack, rotator, tweens, ui });
 
 async function loadPack(pack) {
   currentPack = pack;
@@ -73,6 +61,8 @@ async function loadPack(pack) {
   ui.setHint('');
   try {
     await viewer.load(pack.file);
+    // Pack frei um Y drehbar (360°, keine Feder) — bis "Öffnen".
+    rotator.attach(viewer.getRotationTarget());
     ui.setStatus('');
     ui.setOpenEnabled(true);
   } catch (err) {
@@ -83,12 +73,12 @@ async function loadPack(pack) {
 
 function backToSelection() {
   reveal.reset();
-  loadPack(currentPack); // frisches Pack (setzt Animation auf Frame 0 zurück)
+  loadPack(currentPack); // frisches Pack (Frame 0) + Pack-Rotation wieder aktiv
 }
 
 async function init() {
   start();
-  await cardStack.loadTemplate(); // Karten-Template (filet.glb) einmalig vorladen
+  await cardStack.loadTemplate(); // filet.glb einmalig vorladen (alle Karten teilen es)
   await loadPack(DEFAULT_PACK);
 }
 
