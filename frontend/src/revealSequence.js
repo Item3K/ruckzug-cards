@@ -56,13 +56,22 @@ export class RevealSequence {
     const ripPosition = new THREE.Vector3(0, packH * BEAM_RIP_HEIGHT_FACTOR, 0);
     const duration = this.viewer.getClipDuration();
 
-    // Karten PARALLEL zur Animation holen (nicht vorher awaiten) -> kein Leerlauf.
+    // Reveal-Gate: erst zeigen, wenn BEIDES da ist (Animation fertig + Stapel gebaut).
+    this._packOpened = false;
+    this._stackReady = false;
+    this._revealed = false;
+
+    // Karten PARALLEL zur Animation holen (sofort beim Klick, vor jedem await).
     this._cardsReady = openPack(backendPackId, USER_ID);
     this._cardsReady.catch(() => {}); // unhandled rejection vermeiden (Fehler unten)
 
     // 2) Aufreißen SOFORT starten.
-    this.viewer.onFinished(() => this._onPackOpened(packH));
+    this.viewer.onFinished(() => {
+      this._packOpened = true;
+      this._tryReveal();
+    });
     this.viewer.playOpen();
+    if (duration <= 0) this._packOpened = true; // kein Clip -> sofort "geöffnet"
 
     // 3) Beam im Riss-Moment — sobald die Karten da sind und ~35 % der Animation um.
     const t0 = performance.now();
@@ -74,6 +83,7 @@ export class RevealSequence {
       return;
     }
     this.result = result;
+
     const elapsed = (performance.now() - t0) / 1000;
     const beamAt = Math.max(0, duration * 0.35 - elapsed);
     this.tweens.add({
@@ -83,7 +93,44 @@ export class RevealSequence {
       onComplete: () => this.beam.show(result.beam_stage, ripPosition, packH),
     });
 
-    if (duration <= 0) this._onPackOpened(packH); // kein Clip -> direkt weiter
+    // 4) Stapel JETZT (während der Animation) versteckt vorbauen — die teure Arbeit
+    //    (Klonen + Material schon vorkompiliert) überlappt die Ripp-Animation.
+    this.cardStack.build(result.drawn_cards, this.mode, CARD_VIEW_HEIGHT, true);
+    this.cardStack.onProgress = (r, t) => this.ui.setProgress(r, t);
+    this.cardStack.onDone = () => this._finish();
+    this._stackReady = true;
+    this._tryReveal();
+  }
+
+  /** Reveal nur, wenn Animation fertig UND Stapel vorgebaut ist. */
+  _tryReveal() {
+    if (this._revealed || !this._packOpened || !this._stackReady) return;
+    this._revealed = true;
+
+    // 5) Cross-Fade: Karten SOFORT zeigen, Pack gleichzeitig ausblenden.
+    this.cardStack.show();
+    this.tweens.add({
+      duration: PACK_FADE_DURATION,
+      onUpdate: (p) => this.viewer.setOpacity(1 - p),
+      onComplete: () => this.viewer.setOpacity(0),
+    });
+
+    // 6) Stapel horizontal drehbar (geklemmt + Feder), 7) Tap deckt auf.
+    this.rotator.attach(this.cardStack.getRotationTarget(), {
+      clampRad: STACK_MAX_ANGLE_RAD,
+      spring: true,
+      stiffness: STACK_SPRING_STIFFNESS,
+      damping: STACK_SPRING_DAMPING,
+      onTap: () => this.cardStack.advance(),
+    });
+
+    this.ui.setMode('reveal');
+    this.ui.setProgress(0, this.result.drawn_cards.length);
+    this.ui.setHint(
+      this.mode === 'hinten'
+        ? 'Tippen zum Aufdecken · ziehen zum Drehen'
+        : 'Tippen für die nächste Karte · ziehen zum Drehen',
+    );
   }
 
   _failOpen(e) {
@@ -103,47 +150,6 @@ export class RevealSequence {
       this.ui.setMode('select');
       this.ui.setStatus(msg);
     }
-  }
-
-  async _onPackOpened(packH) {
-    // Karten sollten längst da sein (parallel geholt); zur Sicherheit abwarten.
-    let result;
-    try {
-      result = await this._cardsReady;
-    } catch {
-      return; // Fehler wurde in start() via _failOpen behandelt
-    }
-    this.result = result;
-
-    // 4) Pack kurz ausblenden, dann 5) Stapel im erkannten Modus bauen.
-    this.tweens.add({
-      duration: PACK_FADE_DURATION,
-      onUpdate: (p) => this.viewer.setOpacity(1 - p),
-      onComplete: () => {
-        this.viewer.setOpacity(0);
-
-        this.cardStack.build(result.drawn_cards, this.mode, CARD_VIEW_HEIGHT);
-        this.cardStack.onProgress = (r, t) => this.ui.setProgress(r, t);
-        this.cardStack.onDone = () => this._finish();
-
-        // 6) Stapel horizontal drehbar (geklemmt + Feder), 7) Tap deckt auf.
-        this.rotator.attach(this.cardStack.getRotationTarget(), {
-          clampRad: STACK_MAX_ANGLE_RAD,
-          spring: true,
-          stiffness: STACK_SPRING_STIFFNESS,
-          damping: STACK_SPRING_DAMPING,
-          onTap: () => this.cardStack.advance(),
-        });
-
-        this.ui.setMode('reveal');
-        this.ui.setProgress(0, result.drawn_cards.length);
-        this.ui.setHint(
-          this.mode === 'hinten'
-            ? 'Tippen zum Aufdecken · ziehen zum Drehen'
-            : 'Tippen für die nächste Karte · ziehen zum Drehen',
-        );
-      },
-    });
   }
 
   _finish() {

@@ -30,7 +30,7 @@ const tweens = new TweenManager();
 const rotator = new DragRotator(renderer.domElement);
 const viewer = new PackViewer(scene);
 const beam = new Beam(scene, camera);
-const cardStack = new CardStack(scene, camera, tweens);
+const cardStack = new CardStack(scene, camera, renderer, tweens);
 
 onFrame((delta) => {
   viewer.update(delta);
@@ -87,6 +87,7 @@ function backToSelection() {
 async function init() {
   start();
   await cardStack.loadTemplate(); // filet.glb einmalig vorladen (alle Karten teilen es)
+  cardStack.prewarm();            // Karten-Material vorab kompilieren (kein Reveal-Ruckler)
   await loadPack(DEFAULT_PACK);
 }
 

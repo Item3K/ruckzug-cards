@@ -33,9 +33,10 @@ const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
 export class CardStack {
-  constructor(scene, camera, tweens) {
+  constructor(scene, camera, renderer, tweens) {
     this.scene = scene;
     this.camera = camera;
+    this.renderer = renderer;
     this.tweens = tweens;
 
     this.template = null;
@@ -81,12 +82,27 @@ export class CardStack {
   }
 
   /**
+   * Karten-Material EINMAL vorab kompilieren (Shader-Programm), damit das erste
+   * Rendern der 10 Karten beim Reveal nicht ruckelt. Am besten direkt nach
+   * loadTemplate() beim Seitenstart aufrufen.
+   */
+  prewarm() {
+    if (!this.template || !this.renderer) return;
+    const warm = this.template.clone(true);
+    this.scene.add(warm);
+    // compile() baut die GPU-Programme für alle Materialien im Graph -> danach
+    // sind die (geteilten) Karten-Materialien fertig und werden nur wiederverwendet.
+    this.renderer.compile(this.scene, this.camera);
+    this.scene.remove(warm);
+  }
+
+  /**
    * Stapel bauen.
    * @param {Array} serverCards  vom Server gelieferte Karten
    * @param {string} mode  'vorne' | 'hinten'
    * @param {number} cardHeight  Zielhöhe in Weltunits
    */
-  build(serverCards, mode, cardHeight) {
+  build(serverCards, mode, cardHeight, hidden = false) {
     this.dispose();
     this.mode = mode;
     this.cardHeight = cardHeight;
@@ -97,6 +113,7 @@ export class CardStack {
     const baseRotY = mode === 'vorne' ? Math.PI : 0;
 
     this.root = new THREE.Group();
+    this.root.visible = !hidden; // versteckt vorbauen, später per show() einblenden
     this.scene.add(this.root);
 
     this.cards = serverCards.map((sc, i) => {
@@ -115,6 +132,11 @@ export class CardStack {
     this.currentIndex = 0;
     this.busy = false;
     this.done = false;
+  }
+
+  /** Vorab versteckt gebauten Stapel einblenden. */
+  show() {
+    if (this.root) this.root.visible = true;
   }
 
   update() {}
@@ -168,10 +190,11 @@ export class CardStack {
     });
 
     // Phase C: zur SEITE wegswipen (TCG-Pocket-Stil) + sanft ausblenden.
+    // ease-out: startet zügig, läuft sanft aus.
     const swipeX = fromPos.x + this.cardHeight * CARD_SWIPE_DISTANCE;
     this.tweens.add({
       duration: CARD_SWIPE_DURATION,
-      ease: easeInOutCubic,
+      ease: easeOutCubic,
       onUpdate: (p) => {
         card.holder.position.set(
           fromPos.x + (swipeX - fromPos.x) * p,
