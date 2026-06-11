@@ -12,9 +12,6 @@ import { openPack } from './api.js';
 import {
   CARD_VIEW_HEIGHT,
   BEAM_RIP_HEIGHT_FACTOR,
-  STACK_MAX_ANGLE_RAD,
-  STACK_SPRING_STIFFNESS,
-  STACK_SPRING_DAMPING,
   PACK_FADE_DURATION,
 } from './config.js';
 
@@ -108,7 +105,7 @@ export class RevealSequence {
     // 5) Cross-Fade: Karten SOFORT zeigen, Pack gleichzeitig ausblenden.
     this.cardStack.onProgress = (r, t) => this.ui.setProgress(r, t);
     this.cardStack.onDone = () => this._finish();
-    this.cardStack.onSwipeReady = (ready) => this.ui.setArrows(ready); // Pfeile an/aus
+    this.cardStack.onSwipeReady = (ready, leftX, rightX) => this.ui.setArrows(ready, leftX, rightX);
     this.cardStack.begin();
     this.tweens.add({
       duration: PACK_FADE_DURATION,
@@ -116,21 +113,17 @@ export class RevealSequence {
       onComplete: () => this.viewer.setOpacity(0),
     });
 
-    // 6) Stapel horizontal drehbar (geklemmt + Feder), 7) Tap wischt/deckt auf.
-    this.rotator.attach(this.cardStack.getRotationTarget(), {
-      clampRad: STACK_MAX_ANGLE_RAD,
-      spring: true,
-      stiffness: STACK_SPRING_STIFFNESS,
-      damping: STACK_SPRING_DAMPING,
-      onTap: (clientX) => this.cardStack.handleTap(clientX),
-    });
+    // 6/7) Reveal-Eingabe: Drag auf Karte = wischen, Drag daneben = Stapel drehen,
+    //      Tap auf Rückseite ("hinten") = aufdecken. Alles in cardStack (Raycast).
+    this.rotator.detach();
+    this.cardStack.enableInput();
 
     this.ui.setMode('reveal');
     this.ui.setProgress(0, this.result.drawn_cards.length);
     this.ui.setHint(
       this.mode === 'hinten'
-        ? 'Tippen: aufdecken, dann links/rechts wegwischen · ziehen: drehen'
-        : 'Links/rechts tippen zum Wegwischen · ziehen: drehen',
+        ? 'Tippen: aufdecken · Karte ziehen: wegwischen · daneben ziehen: drehen'
+        : 'Karte links/rechts ziehen: wegwischen · daneben ziehen: drehen',
     );
   }
 
@@ -155,6 +148,7 @@ export class RevealSequence {
 
   _finish() {
     this.active = false;
+    this.cardStack.disableInput();
     this.rotator.detach();
     this.ui.setArrows(false);
     this.ui.setMode('done');
@@ -163,6 +157,7 @@ export class RevealSequence {
 
   reset() {
     this.rotator.detach();
+    this.cardStack.disableInput();
     this.beam.dispose();
     this.cardStack.dispose();
     this.ui.setArrows(false);

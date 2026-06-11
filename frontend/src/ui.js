@@ -99,8 +99,13 @@ export function createUI({ packs, initialId, onSelectPack, onOpen, onBack }) {
     setOpenEnabled(enabled) {
       openBtn.disabled = !enabled;
     },
-    setArrows(visible) {
+    setArrows(visible, leftX, rightX) {
       root.classList.toggle('arrows-on', !!visible);
+      if (visible && Number.isFinite(leftX) && Number.isFinite(rightX)) {
+        // Pfeile direkt neben die linke/rechte Kartenkante setzen.
+        arrowLeft.style.left = `${leftX - 38}px`;
+        arrowRight.style.left = `${rightX + 8}px`;
+      }
     },
   };
 }

@@ -1,52 +1,67 @@
-// Zentrale Tuning-Konstanten für Phase 4b (Steuerung/Optik).
-// Alles, was man zum Justieren anfassen will, steht HIER an einer Stelle.
+// Zentrale Konfiguration für Phase 4b.
+// ============================================================================
+//  FEEL-KONSTANTEN — hier alles zum Selbst-Justieren des Spielgefühls.
+//  (Vite lädt bei Speichern per HMR neu — Werte ändern, speichern, sofort testen.)
+// ============================================================================
 
 import * as THREE from 'three';
 
-// --- Kamera (steht FEST, kein Zoom) -----------------------------------------
-export const CAMERA_FOV = 45;
-export const CAMERA_DISTANCE = 6.0;   // fester Abstand zur Mitte (Sweet-Spot)
+// --- Karten-Wischen (vorderste Karte per Drag wegwischen) -------------------
+// Wie weit (in Weltunits) die Karte horizontal gezogen sein muss, damit sie beim
+// Loslassen RAUSFLIEGT (statt zurückzufedern). Kleiner = leichter rausflutschen.
+export const SWIPE_DISTANCE_THRESHOLD = 0.8;
+// Wie direkt die Karte dem Finger/der Maus folgt (Weltunits pro Pixel Drag).
+// Größer = die Karte "klebt" stärker am Finger / bewegt sich weiter.
+export const SWIPE_FOLLOW_SENSITIVITY = 0.012;
+// Dauer des Rausfliegens nach erfolgreichem Wisch (Sekunden). Bewusst langsamer,
+// weiche ease-out-Kurve (zügig an, sanft aus).
+export const SWIPE_OUT_DURATION = 0.95;
+// Wie weit die Karte beim Rausfliegen seitlich rausgeschoben wird (× Kartenhöhe).
+export const SWIPE_OUT_DISTANCE = 2.6;
+// Dauer des Zurückfederns, wenn nicht weit genug gezogen wurde (Sekunden).
+export const SWIPE_RETURN_DURATION = 0.28;
 
-// Alle Objekte werden auf diese Höhen normiert, damit die feste Kamera für
-// jedes Pack und den Stapel gleich gut passt (formatfüllend, ganz im Bild).
+// --- Tap vs. Drag -----------------------------------------------------------
+// Unter dieser Bewegung (Pixel) gilt eine Geste als Tap/Klick (z.B. Flip im
+// Modus "hinten"), darüber als Drag (Wischen bzw. Stapel-Drehen).
+export const TAP_VS_DRAG_THRESHOLD = 10;
+
+// --- Stapel-Drehen (Drag NEBEN dem Stapel) ----------------------------------
+export const STACK_MAX_ANGLE_DEG = 30; // ± Grenze fürs Stapel-Drehen
+export const STACK_MAX_ANGLE_RAD = THREE.MathUtils.degToRad(STACK_MAX_ANGLE_DEG);
+export const STACK_DRAG_SENSITIVITY = 0.01; // Radiant pro Pixel beim Stapel-Drehen
+// Feder zum Zurückschnappen zur Mitte (leicht unterdämpft = minimales Nachwippen).
+export const STACK_SPRING_STIFFNESS = 130; // höher = schneller/härter zurück
+export const STACK_SPRING_DAMPING = 13;    // niedriger = mehr Nachwippen
+
+// --- Flip (Modus "hinten": Rückseite -> Vorderseite) ------------------------
+export const FLIP_DURATION = 0.45;   // Sekunden
+export const FLIP_FORWARD = 0.5;     // kurzer Bogen nach vorn (× Kartenhöhe), damit
+                                     // die Karte beim Drehen den Stapel nicht durchschneidet
+
+// --- Pack-Schwung (Anschubsen vor dem Öffnen) -------------------------------
+export const PACK_SPIN_FRICTION = 0.6;   // kleiner = dreht länger aus
+export const PACK_DRAG_SENSITIVITY = 0.015; // Empfindlichkeit beim Pack-Drehen (rad/px)
+export const PACK_SPIN_MAX_SPEED = 20;   // rad/s Deckel
+
+// --- Beam -------------------------------------------------------------------
+// Höhe der Beam-Spitze relativ zur Pack-Mitte (× Pack-Höhe). Kleiner/negativer
+// = tiefer am Riss.
+export const BEAM_RIP_HEIGHT_FACTOR = -0.12;
+
+// --- Stapel-Optik -----------------------------------------------------------
+// Minimaler Tiefen-Versatz pro Karte (× Kartenhöhe). Die Karten liegen fast
+// deckungsgleich; Ränder dahinter sieht man erst beim seitlichen Drehen.
+export const CARD_STACK_DEPTH = 0.04;
+
+// ============================================================================
+//  STRUKTUR-KONSTANTEN (Kamera/Größen, selten anzufassen)
+// ============================================================================
+export const CAMERA_FOV = 45;
+export const CAMERA_DISTANCE = 6.0;   // fester Kamera-Abstand (kein Zoom)
 export const PACK_VIEW_HEIGHT = 3.4;  // Zielhöhe des Packs in Weltunits
 export const CARD_VIEW_HEIGHT = 2.4;  // Zielhöhe einer Karte in Weltunits
 
-// --- Drag-Drehen (Objekte rotieren, nicht die Kamera) -----------------------
-export const DRAG_SENSITIVITY = 0.015; // Radiant pro Pixel (höher = empfindlicher)
-export const TAP_THRESHOLD_PX = 10;    // Tap/Drag-Schwelle: weniger Bewegung = Tap (wischen), mehr = Drag (drehen)
-
-// --- Pack-Schwung (Momentum/Inertia, NUR Pack — nicht der Stack) ------------
-// Reibung als exponentielle Abklingrate pro Sekunde: höher = bremst schneller,
-// niedriger = dreht länger aus. Schnelles Ziehen -> höhere Anfangsgeschwindigkeit
-// -> längeres Ausdrehen.
-export const PACK_SPIN_FRICTION = 0.6;  // weiter gesenkt -> dreht deutlich länger aus
-export const PACK_SPIN_MAX_SPEED = 20;  // rad/s Deckel, gegen absurd schnelle Spins
-
-// --- Card-Stack -------------------------------------------------------------
-export const STACK_MAX_ANGLE_DEG = 30;            // ± Grenze fürs Stapel-Drehen
-export const STACK_MAX_ANGLE_RAD = THREE.MathUtils.degToRad(STACK_MAX_ANGLE_DEG);
-// Feder zum Zurückschnappen zur Mitte (leicht unterdämpft = minimales Nachwippen).
-export const STACK_SPRING_STIFFNESS = 130; // höher = schneller/härter
-export const STACK_SPRING_DAMPING = 13;    // niedriger = mehr Nachwippen
-// Minimaler Tiefen-Versatz pro Karte (× Kartenhöhe). Fast deckungsgleich;
-// die Ränder dahinter sieht man erst, wenn man den Stapel seitlich dreht.
-export const CARD_STACK_DEPTH = 0.035;
-
-// --- Reveal-Bewegung (Karte nach vorn holen / wegswipen) --------------------
-export const PRESENT_FORWARD = 0.25;    // × Kartenhöhe Richtung Kamera (leicht vor den Stapel)
-export const PRESENT_UP = 0.05;         // × Kartenhöhe nach oben
-// Aufgedeckte Karte zur SEITE wegwischen (links/rechts je nach Tap), × Kartenhöhe.
-export const CARD_SWIPE_DISTANCE = 2.6;
-export const CARD_SWIPE_DURATION = 0.75; // Sekunden — langsamer/dynamischer, ease-out (zügig an, sanft aus)
-
-// --- Pack öffnen ------------------------------------------------------------
-// Abspieltempo der Aufreiß-Animation (>1 = etwas schneller/kürzer).
-export const PACK_OPEN_TIMESCALE = 1.15;
-// Dauer des Pack-Ausblendens nach dem Aufreißen (kurz -> Karten kommen prompt).
-export const PACK_FADE_DURATION = 0.22;
-
-// --- Beam -------------------------------------------------------------------
-// Höhe des Risses (= Beam-Spitze) über der Pack-Mitte, × Pack-Höhe.
-// 0.35 -> 0.12 -> 0.05 -> -0.05 -> jetzt -0.12 (Spitze noch tiefer). Feinjustage hier.
-export const BEAM_RIP_HEIGHT_FACTOR = -0.12;
+// --- Pack öffnen (Animation/Übergang) ---------------------------------------
+export const PACK_OPEN_TIMESCALE = 1.15; // Abspieltempo der Aufreiß-Animation (>1 = kürzer)
+export const PACK_FADE_DURATION = 0.22;  // Pack-Ausblenden beim Reveal (überlappt die Karten)

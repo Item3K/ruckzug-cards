@@ -93,8 +93,7 @@ canvas {
   transition: opacity 0.25s ease;
   user-select: none;
 }
-.nudge-left { left: max(14px, env(safe-area-inset-left, 14px)); }
-.nudge-right { right: max(14px, env(safe-area-inset-right, 14px)); }
+/* Horizontale Position (left) wird per JS an die Kartenränder gesetzt. */
 
 /* Nur im Reveal-Modus und wenn eine Karte wischbereit ist, sanft pulsierend. */
 .ui[data-mode='reveal'].arrows-on .nudge-left {

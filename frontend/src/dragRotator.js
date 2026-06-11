@@ -8,8 +8,8 @@
 
 import * as THREE from 'three';
 import {
-  DRAG_SENSITIVITY,
-  TAP_THRESHOLD_PX,
+  PACK_DRAG_SENSITIVITY,
+  TAP_VS_DRAG_THRESHOLD,
   PACK_SPIN_FRICTION,
   PACK_SPIN_MAX_SPEED,
 } from './config.js';
@@ -71,7 +71,7 @@ export class DragRotator {
     const dx = e.clientX - this._start.x;
     const dy = e.clientY - this._start.y;
     this._start.moved = Math.max(this._start.moved, Math.hypot(dx, dy));
-    let r = this._start.rot + dx * DRAG_SENSITIVITY; // nur horizontal -> Y-Achse
+    let r = this._start.rot + dx * PACK_DRAG_SENSITIVITY; // nur horizontal -> Y-Achse
     if (this.clampRad != null) r = THREE.MathUtils.clamp(r, -this.clampRad, this.clampRad);
 
     // Momentum nur für freie Objekte (Pack). Beim Stack (spring) NICHT tracken,
@@ -94,7 +94,7 @@ export class DragRotator {
   _up(e) {
     if (!this.dragging) return;
     this.dragging = false;
-    const tap = this._start && this._start.moved < TAP_THRESHOLD_PX;
+    const tap = this._start && this._start.moved < TAP_VS_DRAG_THRESHOLD;
     this._start = null;
     // Nach dem Loslassen aus dem Stand (kurze Pause vor Release) -> kein Spin.
     if (!this.spring && (!this._lastMove || performance.now() - this._lastMove.time > 100)) {
