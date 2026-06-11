@@ -31,13 +31,22 @@ export const STACK_SPRING_STIFFNESS = 130; // höher = schneller/härter
 export const STACK_SPRING_DAMPING = 13;    // niedriger = mehr Nachwippen
 // Minimaler Tiefen-Versatz pro Karte (× Kartenhöhe). Fast deckungsgleich;
 // die Ränder dahinter sieht man erst, wenn man den Stapel seitlich dreht.
-export const CARD_STACK_DEPTH = 0.02;
+export const CARD_STACK_DEPTH = 0.035;
 
-// --- Reveal-Bewegung (Karte nach vorn holen / wegschieben) ------------------
-export const PRESENT_FORWARD = 0.7;   // × Kartenhöhe Richtung Kamera (vor den Stapel)
-export const PRESENT_UP = 0.1;        // × Kartenhöhe nach oben
+// --- Reveal-Bewegung (Karte nach vorn holen / wegswipen) --------------------
+export const PRESENT_FORWARD = 0.7;     // × Kartenhöhe Richtung Kamera (vor den Stapel)
+export const PRESENT_UP = 0.1;          // × Kartenhöhe nach oben
+// Aufgedeckte Karte zur SEITE wegswipen (TCG-Pocket-Stil), × Kartenhöhe nach rechts.
+export const CARD_SWIPE_DISTANCE = 2.4;
+export const CARD_SWIPE_DURATION = 0.42; // Sekunden, weiche Kurve, nicht zu langsam
+
+// --- Pack öffnen ------------------------------------------------------------
+// Abspieltempo der Aufreiß-Animation (>1 = etwas schneller/kürzer).
+export const PACK_OPEN_TIMESCALE = 1.15;
+// Dauer des Pack-Ausblendens nach dem Aufreißen (kurz -> Karten kommen prompt).
+export const PACK_FADE_DURATION = 0.22;
 
 // --- Beam -------------------------------------------------------------------
 // Höhe des Risses (= Beam-Spitze) über der Pack-Mitte, × Pack-Höhe.
-// War 0.35 (zu hoch) -> deutlich gesenkt.
-export const BEAM_RIP_HEIGHT_FACTOR = 0.12;
+// 0.35 -> 0.12 -> jetzt 0.05 (Riss sitzt nahe der Pack-Mitte). Feinjustage hier.
+export const BEAM_RIP_HEIGHT_FACTOR = 0.05;

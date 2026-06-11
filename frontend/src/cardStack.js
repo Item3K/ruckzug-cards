@@ -17,7 +17,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { easeInOutCubic, easeOutCubic } from './tween.js';
-import { CARD_STACK_DEPTH, PRESENT_FORWARD, PRESENT_UP } from './config.js';
+import {
+  CARD_STACK_DEPTH,
+  PRESENT_FORWARD,
+  PRESENT_UP,
+  CARD_SWIPE_DISTANCE,
+  CARD_SWIPE_DURATION,
+} from './config.js';
 
 const BACK_MATERIAL = 'Material.001';
 
@@ -150,21 +156,34 @@ export class CardStack {
   }
 
   _discard(card, fromPos) {
-    const startScale = card.holder.scale.x || 1;
-    // Phase C: nach oben wegschieben + wegskalieren (kein Alpha nötig).
+    // Materialien dieser EINEN Karte isolieren (klonen), damit nur sie ausblendet
+    // (alle übrigen teilen sich weiter das Template-Material).
+    const mats = [];
+    card.holder.traverse((o) => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        mats.push(o.material);
+      }
+    });
+
+    // Phase C: zur SEITE wegswipen (TCG-Pocket-Stil) + sanft ausblenden.
+    const swipeX = fromPos.x + this.cardHeight * CARD_SWIPE_DISTANCE;
     this.tweens.add({
-      duration: 0.4,
-      ease: easeOutCubic,
+      duration: CARD_SWIPE_DURATION,
+      ease: easeInOutCubic,
       onUpdate: (p) => {
         card.holder.position.set(
-          fromPos.x,
-          fromPos.y + this.cardHeight * 0.6 * p,
+          fromPos.x + (swipeX - fromPos.x) * p,
+          fromPos.y,
           fromPos.z,
         );
-        card.holder.scale.setScalar(startScale * (1 - p));
+        const o = 1 - p;
+        for (const m of mats) m.opacity = o;
       },
       onComplete: () => {
         this.root.remove(card.holder);
+        for (const m of mats) m.dispose();
         this.currentIndex += 1;
         if (this.onProgress) this.onProgress(this.currentIndex, this.cards.length);
         if (this.currentIndex >= this.cards.length) {
@@ -172,21 +191,23 @@ export class CardStack {
           this.done = true;
           if (this.onDone) this.onDone();
         } else {
-          this._restack();
           this.busy = false;
         }
       },
     });
+
+    // Parallel: nächste Karten weich nachrücken, WÄHREND diese wegswipet.
+    this._restackForward(this.currentIndex + 1);
   }
 
-  /** Verbleibende Karten an die neuen Tiefen-Slots nachrücken. */
-  _restack() {
-    for (let i = this.currentIndex; i < this.cards.length; i++) {
+  /** Karten ab fromIndex an die Slots 0,1,2… nachrücken lassen. */
+  _restackForward(fromIndex) {
+    for (let i = fromIndex; i < this.cards.length; i++) {
       const holder = this.cards[i].holder;
       const from = holder.position.clone();
-      const to = this._slotPosition(i - this.currentIndex);
+      const to = this._slotPosition(i - fromIndex);
       this.tweens.add({
-        duration: 0.3,
+        duration: CARD_SWIPE_DURATION,
         ease: easeOutCubic,
         onUpdate: (p) => holder.position.lerpVectors(from, to, p),
       });

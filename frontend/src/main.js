@@ -50,7 +50,15 @@ const ui = createUI({
   onBack: () => backToSelection(),
 });
 
-const reveal = new RevealSequence({ viewer, beam, cardStack, rotator, tweens, ui });
+const reveal = new RevealSequence({
+  viewer, beam, cardStack, rotator, tweens, ui,
+  // Bei Fehler (z.B. keine Sanduhren): Pack frisch laden (es wurde parallel zur
+  // Animation schon angerissen) und danach den Fehler sichtbar anzeigen.
+  onAbort: async (msg) => {
+    await loadPack(currentPack);
+    ui.setStatus(msg);
+  },
+});
 
 async function loadPack(pack) {
   currentPack = pack;

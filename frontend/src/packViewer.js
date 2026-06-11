@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { PACK_VIEW_HEIGHT } from './config.js';
+import { PACK_VIEW_HEIGHT, PACK_OPEN_TIMESCALE } from './config.js';
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('/draco/');
@@ -34,8 +34,9 @@ export class PackViewer {
     if (this.mixer) this.mixer.update(delta);
   }
 
+  /** Sichtbare Dauer der Aufreiß-Animation (inkl. Timescale), in Sekunden. */
   getClipDuration() {
-    return this.action ? this.action.getClip().duration : 0;
+    return this.action ? this.action.getClip().duration / PACK_OPEN_TIMESCALE : 0;
   }
 
   onFinished(cb) {
@@ -107,6 +108,7 @@ export class PackViewer {
     this.action.reset();
     this.action.setLoop(THREE.LoopOnce, 1);
     this.action.clampWhenFinished = true;
+    this.action.timeScale = PACK_OPEN_TIMESCALE; // etwas schneller abspielen
     this.action.play();
     // Beam/Hide/Reveal orchestriert revealSequence.js (zeitgesteuert + onFinished).
   }
