@@ -91,7 +91,7 @@ export class DragRotator {
     this.target.rotation.y = r;
   }
 
-  _up() {
+  _up(e) {
     if (!this.dragging) return;
     this.dragging = false;
     const tap = this._start && this._start.moved < TAP_THRESHOLD_PX;
@@ -102,7 +102,8 @@ export class DragRotator {
     }
     if (tap) {
       this.vel = 0; // Tap dreht nicht nach
-      if (this.onTap) this.onTap();
+      // clientX mitgeben (für linke/rechte Tap-Zone beim Karten-Wischen).
+      if (this.onTap) this.onTap(e ? e.clientX : 0);
     }
   }
 

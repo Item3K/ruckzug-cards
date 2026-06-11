@@ -50,6 +50,8 @@ export class CardStack {
     this.done = false;
     this.onDone = null;
     this.onProgress = null;
+    this.onSwipeReady = null; // (ready:boolean) => void: Pfeile/Tap-Zonen an/aus
+    this._ready = false;
   }
 
   /** Drehziel für den DragRotator. */
@@ -88,10 +90,20 @@ export class CardStack {
    */
   prewarm() {
     if (!this.template || !this.renderer) return;
+    // 1) Texturen (Vorder-/Rückseite) explizit auf die GPU laden -> kein Upload-
+    //    Ruckler beim ersten Anzeigen.
+    this.template.traverse((o) => {
+      if (!o.isMesh) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) {
+          if (m && m[key]) this.renderer.initTexture(m[key]);
+        }
+      }
+    });
+    // 2) Shader-Programm der (geteilten) Karten-Materialien einmal vorkompilieren.
     const warm = this.template.clone(true);
     this.scene.add(warm);
-    // compile() baut die GPU-Programme für alle Materialien im Graph -> danach
-    // sind die (geteilten) Karten-Materialien fertig und werden nur wiederverwendet.
     this.renderer.compile(this.scene, this.camera);
     this.scene.remove(warm);
   }
@@ -126,60 +138,95 @@ export class CardStack {
       holder.rotation.y = baseRotY;
       holder.position.copy(this._slotPosition(i));
       this.root.add(holder);
-      return { holder, baseRotY, data: sc };
+      // revealed: zeigt die Vorderseite? Im Modus 'vorne' sofort, sonst nach Flip.
+      return { holder, baseRotY, revealed: mode === 'vorne', data: sc };
     });
 
     this.currentIndex = 0;
     this.busy = false;
     this.done = false;
+    this._ready = false;
   }
 
-  /** Vorab versteckt gebauten Stapel einblenden. */
-  show() {
+  /** Stapel einblenden und die vorderste Karte nach vorn holen (Reveal-Start). */
+  begin() {
     if (this.root) this.root.visible = true;
+    this._present(false); // erste Karte sofort an den Präsentations-Platz
   }
 
   update() {}
 
-  /** Deckt die vorderste Karte auf (vom DragRotator-Tap aufgerufen). */
-  advance() {
+  /**
+   * Tap auf die vorderste Karte. clientX entscheidet die Wisch-Richtung
+   * (linke Hälfte -> links, rechte Hälfte -> rechts). Im Modus 'hinten' deckt
+   * der erste Tap nur auf (Flip, bleibt liegen); erst der nächste Tap wischt.
+   */
+  handleTap(clientX) {
     if (this.busy || this.done) return;
     const card = this.cards[this.currentIndex];
     if (!card) return;
-    this.busy = true;
 
-    const fromPos = card.holder.position.clone();
-    const presentPos = new THREE.Vector3(
-      0,
-      this.cardHeight * PRESENT_UP,
-      this.cardHeight * PRESENT_FORWARD, // Richtung Kamera, VOR den Stapel
-    );
-    const startRotY = card.holder.rotation.y;
-    // Im Modus 'hinten' während des Vorholens umdrehen; 'vorne' bleibt wie es ist.
-    const endRotY = this.mode === 'hinten' ? startRotY + Math.PI : startRotY;
+    // 'hinten' & noch nicht aufgedeckt -> FLIP (bleibt liegen), kein Wischen.
+    if (!card.revealed) {
+      this.busy = true;
+      this._setReady(false);
+      const start = card.holder.rotation.y;
+      const end = start + Math.PI;
+      this.tweens.add({
+        duration: 0.45,
+        ease: easeInOutCubic,
+        onUpdate: (p) => { card.holder.rotation.y = start + (end - start) * p; },
+        onComplete: () => {
+          card.revealed = true;
+          this.busy = false;
+          this._setReady(true);
+        },
+      });
+      return;
+    }
 
-    // Phase A: nach vorn holen (+ ggf. flippen).
-    this.tweens.add({
-      duration: 0.5,
-      ease: easeInOutCubic,
-      onUpdate: (p) => {
-        card.holder.position.lerpVectors(fromPos, presentPos, p);
-        card.holder.rotation.y = startRotY + (endRotY - startRotY) * p;
-      },
-      onComplete: () => {
-        // Phase B: kurz präsentieren.
-        this.tweens.add({
-          duration: 0.4,
-          onUpdate: () => {},
-          onComplete: () => this._discard(card, presentPos),
-        });
-      },
-    });
+    // bereits aufgedeckt -> nach links/rechts wegwischen.
+    this._swipe(card, this._tapSide(clientX));
   }
 
-  _discard(card, fromPos) {
-    // Materialien dieser EINEN Karte isolieren (klonen), damit nur sie ausblendet
-    // (alle übrigen teilen sich weiter das Template-Material).
+  // --- intern: Reveal-Schritte -----------------------------------------------
+
+  /** linke Bildhälfte -> -1 (links), rechte -> +1 (rechts). */
+  _tapSide(clientX) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return clientX < rect.left + rect.width / 2 ? -1 : 1;
+  }
+
+  _present(animated) {
+    const card = this.cards[this.currentIndex];
+    if (!card) { this._setReady(false); return; }
+    this.busy = true;
+    this._setReady(false);
+    this._restackBehind(); // dahinterliegende Karten an ihre Slots
+
+    const from = card.holder.position.clone();
+    const to = this._presentPos();
+    const finish = () => {
+      this.busy = false;
+      this._setReady(card.revealed); // 'vorne' -> Pfeile sofort; 'hinten' erst nach Flip
+    };
+    if (animated) {
+      this.tweens.add({
+        duration: 0.3,
+        ease: easeOutCubic,
+        onUpdate: (p) => card.holder.position.lerpVectors(from, to, p),
+        onComplete: finish,
+      });
+    } else {
+      card.holder.position.copy(to);
+      finish();
+    }
+  }
+
+  _swipe(card, dir) {
+    this.busy = true;
+    this._setReady(false);
+    // Materialien dieser EINEN Karte isolieren (klonen), nur sie blendet aus.
     const mats = [];
     card.holder.traverse((o) => {
       if (o.isMesh) {
@@ -188,19 +235,13 @@ export class CardStack {
         mats.push(o.material);
       }
     });
-
-    // Phase C: zur SEITE wegswipen (TCG-Pocket-Stil) + sanft ausblenden.
-    // ease-out: startet zügig, läuft sanft aus.
-    const swipeX = fromPos.x + this.cardHeight * CARD_SWIPE_DISTANCE;
+    const from = card.holder.position.clone();
+    const toX = from.x + dir * this.cardHeight * CARD_SWIPE_DISTANCE;
     this.tweens.add({
       duration: CARD_SWIPE_DURATION,
-      ease: easeOutCubic,
+      ease: easeOutCubic, // zügig an, sanft aus
       onUpdate: (p) => {
-        card.holder.position.set(
-          fromPos.x + (swipeX - fromPos.x) * p,
-          fromPos.y,
-          fromPos.z,
-        );
+        card.holder.position.x = from.x + (toX - from.x) * p;
         const o = 1 - p;
         for (const m of mats) m.opacity = o;
       },
@@ -212,29 +253,37 @@ export class CardStack {
         if (this.currentIndex >= this.cards.length) {
           this.busy = false;
           this.done = true;
+          this._setReady(false);
           if (this.onDone) this.onDone();
         } else {
-          this.busy = false;
+          this._present(true); // nächste Karte weich nach vorn (setzt busy intern)
         }
       },
     });
-
-    // Parallel: nächste Karten weich nachrücken, WÄHREND diese wegswipet.
-    this._restackForward(this.currentIndex + 1);
   }
 
-  /** Karten ab fromIndex an die Slots 0,1,2… nachrücken lassen. */
-  _restackForward(fromIndex) {
-    for (let i = fromIndex; i < this.cards.length; i++) {
+  /** Dahinterliegende Karten an ihre Tiefen-Slots (relativ zur aktuellen). */
+  _restackBehind() {
+    for (let i = this.currentIndex + 1; i < this.cards.length; i++) {
       const holder = this.cards[i].holder;
       const from = holder.position.clone();
-      const to = this._slotPosition(i - fromIndex);
+      const to = this._slotPosition(i - this.currentIndex);
       this.tweens.add({
-        duration: CARD_SWIPE_DURATION,
+        duration: 0.3,
         ease: easeOutCubic,
         onUpdate: (p) => holder.position.lerpVectors(from, to, p),
       });
     }
+  }
+
+  _presentPos() {
+    return new THREE.Vector3(0, this.cardHeight * PRESENT_UP, this.cardHeight * PRESENT_FORWARD);
+  }
+
+  _setReady(ready) {
+    if (ready === this._ready) return;
+    this._ready = ready;
+    if (this.onSwipeReady) this.onSwipeReady(ready);
   }
 
   dispose() {
@@ -247,6 +296,7 @@ export class CardStack {
     this.currentIndex = 0;
     this.busy = false;
     this.done = false;
+    this._setReady(false);
   }
 
   // --- intern ----------------------------------------------------------------

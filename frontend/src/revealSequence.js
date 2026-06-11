@@ -96,8 +96,6 @@ export class RevealSequence {
     // 4) Stapel JETZT (während der Animation) versteckt vorbauen — die teure Arbeit
     //    (Klonen + Material schon vorkompiliert) überlappt die Ripp-Animation.
     this.cardStack.build(result.drawn_cards, this.mode, CARD_VIEW_HEIGHT, true);
-    this.cardStack.onProgress = (r, t) => this.ui.setProgress(r, t);
-    this.cardStack.onDone = () => this._finish();
     this._stackReady = true;
     this._tryReveal();
   }
@@ -108,28 +106,31 @@ export class RevealSequence {
     this._revealed = true;
 
     // 5) Cross-Fade: Karten SOFORT zeigen, Pack gleichzeitig ausblenden.
-    this.cardStack.show();
+    this.cardStack.onProgress = (r, t) => this.ui.setProgress(r, t);
+    this.cardStack.onDone = () => this._finish();
+    this.cardStack.onSwipeReady = (ready) => this.ui.setArrows(ready); // Pfeile an/aus
+    this.cardStack.begin();
     this.tweens.add({
       duration: PACK_FADE_DURATION,
       onUpdate: (p) => this.viewer.setOpacity(1 - p),
       onComplete: () => this.viewer.setOpacity(0),
     });
 
-    // 6) Stapel horizontal drehbar (geklemmt + Feder), 7) Tap deckt auf.
+    // 6) Stapel horizontal drehbar (geklemmt + Feder), 7) Tap wischt/deckt auf.
     this.rotator.attach(this.cardStack.getRotationTarget(), {
       clampRad: STACK_MAX_ANGLE_RAD,
       spring: true,
       stiffness: STACK_SPRING_STIFFNESS,
       damping: STACK_SPRING_DAMPING,
-      onTap: () => this.cardStack.advance(),
+      onTap: (clientX) => this.cardStack.handleTap(clientX),
     });
 
     this.ui.setMode('reveal');
     this.ui.setProgress(0, this.result.drawn_cards.length);
     this.ui.setHint(
       this.mode === 'hinten'
-        ? 'Tippen zum Aufdecken · ziehen zum Drehen'
-        : 'Tippen für die nächste Karte · ziehen zum Drehen',
+        ? 'Tippen: aufdecken, dann links/rechts wegwischen · ziehen: drehen'
+        : 'Links/rechts tippen zum Wegwischen · ziehen: drehen',
     );
   }
 
@@ -155,6 +156,7 @@ export class RevealSequence {
   _finish() {
     this.active = false;
     this.rotator.detach();
+    this.ui.setArrows(false);
     this.ui.setMode('done');
     this.ui.setStatus(`Fertig — Sanduhren übrig: ${this.result.hourglasses_remaining}`);
   }
@@ -163,6 +165,7 @@ export class RevealSequence {
     this.rotator.detach();
     this.beam.dispose();
     this.cardStack.dispose();
+    this.ui.setArrows(false);
     this.active = false;
     this.result = null;
   }
