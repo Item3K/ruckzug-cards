@@ -84,7 +84,7 @@ canvas {
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 48px;
+  font-size: 60px;
   line-height: 1;
   color: #e2e8f0;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);

@@ -23,7 +23,7 @@ import {
   CARD_STACK_DEPTH,
   SWIPE_DISTANCE_THRESHOLD,
   SWIPE_FOLLOW_SENSITIVITY,
-  SWIPE_OUT_DURATION,
+  SWIPE_LAUNCH_SPEED,
   SWIPE_OUT_DISTANCE,
   SWIPE_RETURN_DURATION,
   TAP_VS_DRAG_THRESHOLD,
@@ -31,6 +31,7 @@ import {
   STACK_DRAG_SENSITIVITY,
   STACK_SPRING_STIFFNESS,
   STACK_SPRING_DAMPING,
+  KEY_ROTATE_STEP,
   FLIP_DURATION,
   FLIP_FORWARD,
 } from './config.js';
@@ -67,12 +68,14 @@ export class CardStack {
     // Eingabe-Status
     this._inputOn = false;
     this._grab = null;            // aktuelle Geste
+    this._flying = null;          // Karte, die gerade rausfliegt (Momentum)
     this._stackVel = 0;           // Winkel-Geschwindigkeit der Stapel-Feder
     this._raycaster = new THREE.Raycaster();
     this._ndc = new THREE.Vector2();
     this._onDown = this._onDown.bind(this);
     this._onMove = this._onMove.bind(this);
     this._onUp = this._onUp.bind(this);
+    this._onKey = this._onKey.bind(this);
   }
 
   /** filet.glb laden + Template normalisieren (einmalig, gecached). */
@@ -173,6 +176,7 @@ export class CardStack {
     this.renderer.domElement.addEventListener('pointerdown', this._onDown);
     window.addEventListener('pointermove', this._onMove);
     window.addEventListener('pointerup', this._onUp);
+    window.addEventListener('keydown', this._onKey);
   }
 
   disableInput() {
@@ -181,17 +185,29 @@ export class CardStack {
     this.renderer.domElement.removeEventListener('pointerdown', this._onDown);
     window.removeEventListener('pointermove', this._onMove);
     window.removeEventListener('pointerup', this._onUp);
+    window.removeEventListener('keydown', this._onKey);
     this._grab = null;
   }
 
-  /** Pro Frame: Stapel federt zur Mitte zurück (wenn nicht gerade gedreht wird). */
+  /** Pro Frame: rausfliegende Karte (Momentum) + Stapel-Feder zur Mitte. */
   update(delta) {
+    const d = Math.min(delta, 1 / 30);
+
+    // Karte fliegt mit ihrer mitgenommenen Geschwindigkeit raus und blendet aus.
+    if (this._flying) {
+      const f = this._flying;
+      f.card.holder.position.x += f.vel * d;
+      f.traveled += Math.abs(f.vel * d);
+      const op = Math.max(0, 1 - f.traveled / f.target);
+      for (const m of f.mats) m.opacity = op;
+      if (f.traveled >= f.target) this._finishFlyOut();
+    }
+
     if (!this.root) return;
     const draggingStack = this._grab && this._grab.mode === 'stack';
     if (draggingStack) return;
     const x = this.root.rotation.y;
     if (Math.abs(x) < 1e-4 && Math.abs(this._stackVel) < 1e-4) return;
-    const d = Math.min(delta, 1 / 30);
     const acc = -STACK_SPRING_STIFFNESS * x - STACK_SPRING_DAMPING * this._stackVel;
     this._stackVel += acc * d;
     this.root.rotation.y = x + this._stackVel * d;
@@ -206,16 +222,16 @@ export class CardStack {
     const card = this.cards[this.currentIndex];
     const onCard = card && !this.busy && this._raycastFront(e, card);
     if (onCard && card.revealed) {
-      // Greifen der vordersten (aufgedeckten) Karte -> Wischen.
-      this._grab = { mode: 'card', startX: e.clientX, cardStartX: card.holder.position.x, moved: 0 };
+      // Greifen der vordersten (aufgedeckten) Karte -> Wischen (Drag oder Klick).
+      this._grab = {
+        mode: 'card', startX: e.clientX, cardStartX: card.holder.position.x,
+        moved: 0, lastX: e.clientX, lastT: performance.now(), velPx: 0,
+      };
     } else {
       // Leerer Bereich (oder Rückseite, die nur per Tap geflippt wird) -> Stapel drehen.
       this._stackVel = 0;
       this._grab = {
-        mode: 'stack',
-        startX: e.clientX,
-        startRot: this.root.rotation.y,
-        moved: 0,
+        mode: 'stack', startX: e.clientX, startRot: this.root.rotation.y, moved: 0,
         tapFlip: !!(onCard && !card.revealed), // Tap auf Rückseite -> Flip-Kandidat
       };
     }
@@ -227,7 +243,14 @@ export class CardStack {
     this._grab.moved = Math.max(this._grab.moved, Math.abs(dx));
     if (this._grab.mode === 'card') {
       const card = this.cards[this.currentIndex];
-      if (card) card.holder.position.x = this._grab.cardStartX + dx * SWIPE_FOLLOW_SENSITIVITY;
+      if (!card) return;
+      // Momentane Geschwindigkeit (px/s) mitschreiben, für nahtlosen Wegflug.
+      const now = performance.now();
+      const dt = (now - this._grab.lastT) / 1000;
+      if (dt > 0) this._grab.velPx = (e.clientX - this._grab.lastX) / dt;
+      this._grab.lastX = e.clientX;
+      this._grab.lastT = now;
+      card.holder.position.x = this._grab.cardStartX + dx * SWIPE_FOLLOW_SENSITIVITY;
     } else {
       const r = this._grab.startRot + dx * STACK_DRAG_SENSITIVITY;
       this.root.rotation.y = THREE.MathUtils.clamp(r, -STACK_MAX_ANGLE_RAD, STACK_MAX_ANGLE_RAD);
@@ -238,17 +261,66 @@ export class CardStack {
     const g = this._grab;
     this._grab = null;
     if (!g) return;
+
     if (g.mode === 'card') {
       const card = this.cards[this.currentIndex];
       if (!card) return;
+      if (g.moved < TAP_VS_DRAG_THRESHOLD) {
+        // KLICK auf die Karte: linke Hälfte -> links, rechte Hälfte -> rechts.
+        this._startFlyOut(card, this._sideFromX(g.startX), SWIPE_LAUNCH_SPEED);
+        return;
+      }
       const x = card.holder.position.x;
-      if (Math.abs(x) >= SWIPE_DISTANCE_THRESHOLD) this._flyOut(card, Math.sign(x) || 1);
-      else this._returnCard(card);
+      if (Math.abs(x) >= SWIPE_DISTANCE_THRESHOLD) {
+        // DRAG weit genug: mit mitgenommener Geschwindigkeit rausfliegen (Momentum).
+        const dir = Math.sign(x) || 1;
+        const velWorld = (g.velPx || 0) * SWIPE_FOLLOW_SENSITIVITY;
+        // Geschwindigkeit in Wischrichtung; mindestens Launch-Speed -> kein Stocken.
+        const speed = velWorld * dir > 0
+          ? Math.max(Math.abs(velWorld), SWIPE_LAUNCH_SPEED)
+          : SWIPE_LAUNCH_SPEED;
+        this._startFlyOut(card, dir, speed);
+      } else {
+        this._returnCard(card);
+      }
     } else if (g.tapFlip && g.moved < TAP_VS_DRAG_THRESHOLD) {
       // Tap auf die Rückseite -> aufdecken (Flip), bleibt liegen.
       this._flip(this.cards[this.currentIndex]);
     }
     // Stapel-Drehen: Rückkehr zur Mitte erledigt update() (Feder).
+  }
+
+  /** Tastatur: Pfeile drehen den Stapel, Space/Enter wischt/deckt auf. */
+  _onKey(e) {
+    if (this.busy || this.done || !this.root) return;
+    const card = this.cards[this.currentIndex];
+    const code = e.code;
+    if (code === 'ArrowLeft') {
+      e.preventDefault();
+      this._nudgeStack(1);   // Stapel nach links drehen
+    } else if (code === 'ArrowRight') {
+      e.preventDefault();
+      this._nudgeStack(-1);  // nach rechts
+    } else if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter'
+      || e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      if (!card) return;
+      if (!card.revealed) this._flip(card);            // "hinten": erst aufdecken
+      else this._startFlyOut(card, 1, SWIPE_LAUNCH_SPEED); // dann nach rechts wischen
+    }
+  }
+
+  _nudgeStack(dir) {
+    this._stackVel = 0;
+    const r = this.root.rotation.y + dir * KEY_ROTATE_STEP;
+    this.root.rotation.y = THREE.MathUtils.clamp(r, -STACK_MAX_ANGLE_RAD, STACK_MAX_ANGLE_RAD);
+    // Rückkehr zur Mitte erledigt die Feder in update().
+  }
+
+  /** linke Bildhälfte -> -1 (links), rechte -> +1 (rechts). */
+  _sideFromX(clientX) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return clientX < rect.left + rect.width / 2 ? -1 : 1;
   }
 
   // --- Reveal-Schritte -------------------------------------------------------
@@ -276,7 +348,14 @@ export class CardStack {
     });
   }
 
-  _flyOut(card, dir) {
+  /**
+   * Karte rausfliegen lassen — geschwindigkeitsbasiert (Momentum), nicht als
+   * Tween aus dem Stand. Übergang vom Finger-Folgen ist dadurch nahtlos.
+   * @param {number} dir   -1 links, +1 rechts
+   * @param {number} speed Startgeschwindigkeit in Weltunits/Sek
+   */
+  _startFlyOut(card, dir, speed) {
+    if (!card || this._flying) return;
     this.busy = true;
     this._setReady(false);
     // Materialien nur dieser Karte isolieren (klonen), damit nur sie ausblendet.
@@ -288,31 +367,30 @@ export class CardStack {
         mats.push(o.material);
       }
     });
-    const fromX = card.holder.position.x;
-    const toX = fromX + dir * this.cardHeight * SWIPE_OUT_DISTANCE;
-    this.tweens.add({
-      duration: SWIPE_OUT_DURATION,
-      ease: easeOutCubic, // zügig an, sanft aus
-      onUpdate: (p) => {
-        card.holder.position.x = fromX + (toX - fromX) * p;
-        const o = 1 - p;
-        for (const m of mats) m.opacity = o;
-      },
-      onComplete: () => {
-        this.root.remove(card.holder);
-        for (const m of mats) m.dispose();
-        this.currentIndex += 1;
-        if (this.onProgress) this.onProgress(this.currentIndex, this.cards.length);
-        if (this.currentIndex >= this.cards.length) {
-          this.busy = false;
-          this.done = true;
-          this._setReady(false);
-          if (this.onDone) this.onDone();
-        } else {
-          this._advanceNext();
-        }
-      },
-    });
+    this._flying = {
+      card,
+      vel: dir * Math.abs(speed),
+      traveled: 0,
+      target: this.cardHeight * SWIPE_OUT_DISTANCE,
+      mats,
+    };
+  }
+
+  _finishFlyOut() {
+    const f = this._flying;
+    this._flying = null;
+    this.root.remove(f.card.holder);
+    for (const m of f.mats) m.dispose();
+    this.currentIndex += 1;
+    if (this.onProgress) this.onProgress(this.currentIndex, this.cards.length);
+    if (this.currentIndex >= this.cards.length) {
+      this.busy = false;
+      this.done = true;
+      this._setReady(false);
+      if (this.onDone) this.onDone();
+    } else {
+      this._advanceNext();
+    }
   }
 
   /** Nicht weit genug gezogen -> Karte federt an ihren Platz (x=0) zurück. */
@@ -389,6 +467,7 @@ export class CardStack {
     this.busy = false;
     this.done = false;
     this._stackVel = 0;
+    this._flying = null;
     this._setReady(false);
   }
 

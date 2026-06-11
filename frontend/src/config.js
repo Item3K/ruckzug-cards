@@ -13,10 +13,13 @@ export const SWIPE_DISTANCE_THRESHOLD = 0.8;
 // Wie direkt die Karte dem Finger/der Maus folgt (Weltunits pro Pixel Drag).
 // Größer = die Karte "klebt" stärker am Finger / bewegt sich weiter.
 export const SWIPE_FOLLOW_SENSITIVITY = 0.012;
-// Dauer des Rausfliegens nach erfolgreichem Wisch (Sekunden). Bewusst langsamer,
-// weiche ease-out-Kurve (zügig an, sanft aus).
-export const SWIPE_OUT_DURATION = 0.95;
-// Wie weit die Karte beim Rausfliegen seitlich rausgeschoben wird (× Kartenhöhe).
+// Mindest-Startgeschwindigkeit beim Rausfliegen (Weltunits/Sek). Die Karte nimmt
+// die Bewegungsgeschwindigkeit aus dem Drag mit (Momentum); ein schneller Flick
+// fliegt schneller, ein langsames Ziehen mindestens mit diesem Wert -> kein Stocken.
+// Auch der Startwert beim Klick-Wischen (ohne Drag).
+export const SWIPE_LAUNCH_SPEED = 11;
+// Strecke, über die die Karte rausgleitet + ausblendet, bis sie entfernt wird
+// (× Kartenhöhe).
 export const SWIPE_OUT_DISTANCE = 2.6;
 // Dauer des Zurückfederns, wenn nicht weit genug gezogen wurde (Sekunden).
 export const SWIPE_RETURN_DURATION = 0.28;
@@ -33,6 +36,8 @@ export const STACK_DRAG_SENSITIVITY = 0.01; // Radiant pro Pixel beim Stapel-Dre
 // Feder zum Zurückschnappen zur Mitte (leicht unterdämpft = minimales Nachwippen).
 export const STACK_SPRING_STIFFNESS = 130; // höher = schneller/härter zurück
 export const STACK_SPRING_DAMPING = 13;    // niedriger = mehr Nachwippen
+// Tastatur: Dreh-Schrittweite pro Druck auf Pfeil-links/-rechts (Radiant).
+export const KEY_ROTATE_STEP = THREE.MathUtils.degToRad(18);
 
 // --- Flip (Modus "hinten": Rückseite -> Vorderseite) ------------------------
 export const FLIP_DURATION = 0.45;   // Sekunden
