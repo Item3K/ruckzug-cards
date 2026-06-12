@@ -36,14 +36,6 @@ export function createUI({ packs, initialId, onSelectPack, onOpen, onBack }) {
     packButtons.forEach((b, key) => b.classList.toggle('active', key === id));
   }
 
-  // --- Nudge-Pfeile (markieren die Tap-Zonen links/rechts beim Wegwischen) ---
-  const arrowLeft = document.createElement('div');
-  arrowLeft.className = 'nudge nudge-left';
-  arrowLeft.textContent = '‹';
-  const arrowRight = document.createElement('div');
-  arrowRight.className = 'nudge nudge-right';
-  arrowRight.textContent = '›';
-
   // --- Mittiger Hinweis (Reveal) ---
   const hint = document.createElement('div');
   hint.className = 'hint';
@@ -70,8 +62,6 @@ export function createUI({ packs, initialId, onSelectPack, onOpen, onBack }) {
   actions.appendChild(backBtn);
 
   root.appendChild(picker);
-  root.appendChild(arrowLeft);
-  root.appendChild(arrowRight);
   root.appendChild(hint);
   root.appendChild(status);
   root.appendChild(actions);
@@ -98,14 +88,6 @@ export function createUI({ packs, initialId, onSelectPack, onOpen, onBack }) {
     },
     setOpenEnabled(enabled) {
       openBtn.disabled = !enabled;
-    },
-    setArrows(visible, leftX, rightX) {
-      root.classList.toggle('arrows-on', !!visible);
-      if (visible && Number.isFinite(leftX) && Number.isFinite(rightX)) {
-        // Pfeile direkt neben die linke/rechte Kartenkante setzen.
-        arrowLeft.style.left = `${leftX - 46}px`;
-        arrowRight.style.left = `${rightX + 8}px`;
-      }
     },
   };
 }

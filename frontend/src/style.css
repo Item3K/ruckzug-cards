@@ -79,40 +79,7 @@ canvas {
   text-align: center;
 }
 
-/* --- Nudge-Pfeile (Tap-Zonen links/rechts) --- */
-.nudge {
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 60px;
-  line-height: 1;
-  color: #e2e8f0;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
-  pointer-events: none;
-  opacity: 0;                /* standardmäßig aus */
-  transition: opacity 0.25s ease;
-  user-select: none;
-}
-/* Horizontale Position (left) wird per JS an die Kartenränder gesetzt. */
-
-/* Nur im Reveal-Modus und wenn eine Karte wischbereit ist, sanft pulsierend. */
-.ui[data-mode='reveal'].arrows-on .nudge-left {
-  opacity: 0.7;
-  animation: nudge-left-pulse 1.4s ease-in-out infinite;
-}
-.ui[data-mode='reveal'].arrows-on .nudge-right {
-  opacity: 0.7;
-  animation: nudge-right-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes nudge-left-pulse {
-  0%, 100% { opacity: 0.35; transform: translateY(-50%) translateX(0); }
-  50%      { opacity: 0.85; transform: translateY(-50%) translateX(-6px); }
-}
-@keyframes nudge-right-pulse {
-  0%, 100% { opacity: 0.35; transform: translateY(-50%) translateX(0); }
-  50%      { opacity: 0.85; transform: translateY(-50%) translateX(6px); }
-}
+/* Hinweis: die Wisch-Pfeile sind jetzt echte 3D-Objekte (cardStack.js), kein DOM. */
 
 .status {
   pointer-events: none;

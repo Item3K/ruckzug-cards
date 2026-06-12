@@ -36,8 +36,6 @@ export const STACK_DRAG_SENSITIVITY = 0.01; // Radiant pro Pixel beim Stapel-Dre
 // Feder zum Zurückschnappen zur Mitte (leicht unterdämpft = minimales Nachwippen).
 export const STACK_SPRING_STIFFNESS = 130; // höher = schneller/härter zurück
 export const STACK_SPRING_DAMPING = 13;    // niedriger = mehr Nachwippen
-// Tastatur: Dreh-Schrittweite pro Druck auf Pfeil-links/-rechts (Radiant).
-export const KEY_ROTATE_STEP = THREE.MathUtils.degToRad(18);
 
 // --- Flip (Modus "hinten": Rückseite -> Vorderseite) ------------------------
 export const FLIP_DURATION = 0.45;   // Sekunden
@@ -51,8 +49,8 @@ export const PACK_SPIN_MAX_SPEED = 20;   // rad/s Deckel
 
 // --- Beam -------------------------------------------------------------------
 // Höhe der Beam-Spitze relativ zur Pack-Mitte (× Pack-Höhe). Kleiner/negativer
-// = tiefer am Riss.
-export const BEAM_RIP_HEIGHT_FACTOR = -0.12;
+// = tiefer am Riss. (Verlauf: 0.35 -> 0.12 -> 0.05 -> -0.05 -> -0.12 -> -0.22)
+export const BEAM_RIP_HEIGHT_FACTOR = -0.22;
 
 // --- Stapel-Optik -----------------------------------------------------------
 // Minimaler Tiefen-Versatz pro Karte (× Kartenhöhe). Die Karten liegen fast

@@ -31,7 +31,6 @@ import {
   STACK_DRAG_SENSITIVITY,
   STACK_SPRING_STIFFNESS,
   STACK_SPRING_DAMPING,
-  KEY_ROTATE_STEP,
   FLIP_DURATION,
   FLIP_FORWARD,
 } from './config.js';
@@ -61,9 +60,14 @@ export class CardStack {
     this.done = false;
     this.onDone = null;
     this.onProgress = null;
-    // (ready, leftX, rightX) => void: Pfeile an/aus + Bildschirm-X der Kartenränder.
-    this.onSwipeReady = null;
     this._ready = false;
+
+    // 3D-Pfeile (echte Szenen-Objekte neben der Karte, an den Stapel gekoppelt).
+    this._arrows = null;
+    this._arrowL = null;
+    this._arrowR = null;
+    this._arrowGapX = 0;
+    this._pulseT = 0;
 
     // Eingabe-Status
     this._inputOn = false;
@@ -156,6 +160,46 @@ export class CardStack {
     this.done = false;
     this._ready = false;
     this._stackVel = 0;
+
+    // 3D-Pfeile neben der Karte (an den Stapel gekoppelt -> bewegen/zoomen korrekt mit).
+    const box = new THREE.Box3().setFromObject(this.cards[0].holder);
+    const halfWidth = (box.max.x - box.min.x) / 2;
+    this._buildArrows(halfWidth);
+  }
+
+  /** Zwei pulsierende 3D-Pfeile links/rechts neben der vordersten Karte. */
+  _buildArrows(cardHalfWidth) {
+    const h = this.cardHeight * 0.32;
+    const w = h * 0.72;
+    // Dreieck, das nach +x (rechts) zeigt.
+    const shape = new THREE.Shape();
+    shape.moveTo(0, h / 2);
+    shape.lineTo(0, -h / 2);
+    shape.lineTo(w, 0);
+    shape.lineTo(0, h / 2);
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.translate(-w / 2, 0, 0); // um eigene Mitte
+
+    const mkMat = () => new THREE.MeshBasicMaterial({
+      color: 0xe8eef7, transparent: true, opacity: 0.6,
+      depthTest: false, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+    });
+    this._arrowR = new THREE.Mesh(geo, mkMat());
+    this._arrowL = new THREE.Mesh(geo, mkMat());
+    this._arrowL.rotation.z = Math.PI; // zeigt nach links
+
+    const gap = this.cardHeight * 0.14;
+    this._arrowGapX = cardHalfWidth + gap;
+    const z = this.cardHeight * 0.05; // leicht vor der Karte
+    this._arrowR.position.set(this._arrowGapX, 0, z);
+    this._arrowL.position.set(-this._arrowGapX, 0, z);
+
+    this._arrows = new THREE.Group();
+    this._arrows.add(this._arrowL, this._arrowR);
+    this._arrows.visible = false;
+    this._arrowL.renderOrder = 999;
+    this._arrowR.renderOrder = 999;
+    this.root.add(this._arrows);
   }
 
   /** Stapel einblenden (er ist bereits korrekt aufgebaut). */
@@ -189,9 +233,21 @@ export class CardStack {
     this._grab = null;
   }
 
-  /** Pro Frame: rausfliegende Karte (Momentum) + Stapel-Feder zur Mitte. */
+  /** Pro Frame: rausfliegende Karte (Momentum) + Stapel-Feder + Pfeil-Puls. */
   update(delta) {
     const d = Math.min(delta, 1 / 30);
+
+    // Pfeile sanft pulsieren (Opazität + leichtes Wandern nach außen).
+    if (this._arrows && this._arrows.visible) {
+      this._pulseT += delta;
+      const s = 0.5 + 0.5 * Math.sin(this._pulseT * Math.PI * 1.4); // 0..1
+      const op = 0.35 + 0.5 * s;
+      const out = this.cardHeight * 0.06 * s;
+      this._arrowL.material.opacity = op;
+      this._arrowR.material.opacity = op;
+      this._arrowL.position.x = -(this._arrowGapX + out);
+      this._arrowR.position.x = this._arrowGapX + out;
+    }
 
     // Karte fliegt mit ihrer mitgenommenen Geschwindigkeit raus und blendet aus.
     if (this._flying) {
@@ -290,31 +346,25 @@ export class CardStack {
     // Stapel-Drehen: Rückkehr zur Mitte erledigt update() (Feder).
   }
 
-  /** Tastatur: Pfeile drehen den Stapel, Space/Enter wischt/deckt auf. */
+  /**
+   * Tastatur: Pfeil links/rechts WISCHT die Karte nach links/rechts,
+   * Space/Enter wischt nach rechts. (Stapel-Drehen nur noch per Drag daneben.)
+   * "hinten": ist die Karte noch verdeckt, deckt der Tastendruck erst auf.
+   */
   _onKey(e) {
     if (this.busy || this.done || !this.root) return;
     const card = this.cards[this.currentIndex];
+    if (!card) return;
     const code = e.code;
-    if (code === 'ArrowLeft') {
-      e.preventDefault();
-      this._nudgeStack(1);   // Stapel nach links drehen
-    } else if (code === 'ArrowRight') {
-      e.preventDefault();
-      this._nudgeStack(-1);  // nach rechts
-    } else if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter'
-      || e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      if (!card) return;
-      if (!card.revealed) this._flip(card);            // "hinten": erst aufdecken
-      else this._startFlyOut(card, 1, SWIPE_LAUNCH_SPEED); // dann nach rechts wischen
-    }
-  }
-
-  _nudgeStack(dir) {
-    this._stackVel = 0;
-    const r = this.root.rotation.y + dir * KEY_ROTATE_STEP;
-    this.root.rotation.y = THREE.MathUtils.clamp(r, -STACK_MAX_ANGLE_RAD, STACK_MAX_ANGLE_RAD);
-    // Rückkehr zur Mitte erledigt die Feder in update().
+    let dir = 0;
+    if (code === 'ArrowLeft') dir = -1;
+    else if (code === 'ArrowRight') dir = 1;
+    else if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter'
+      || e.key === ' ' || e.key === 'Enter') dir = 1;
+    else return;
+    e.preventDefault();
+    if (!card.revealed) this._flip(card);                  // erst aufdecken ("hinten")
+    else this._startFlyOut(card, dir, SWIPE_LAUNCH_SPEED);  // dann in Richtung wischen
   }
 
   /** linke Bildhälfte -> -1 (links), rechte -> +1 (rechts). */
@@ -431,20 +481,7 @@ export class CardStack {
 
   _setReady(ready) {
     this._ready = ready;
-    if (!this.onSwipeReady) return;
-    if (!ready) { this.onSwipeReady(false); return; }
-    // Bildschirm-X der linken/rechten Kartenkante berechnen (für Pfeil-Platzierung).
-    const card = this.cards[this.currentIndex];
-    card.holder.updateWorldMatrix(true, true);
-    const box = new THREE.Box3().setFromObject(card.holder);
-    const cy = (box.min.y + box.max.y) / 2;
-    const cz = (box.min.z + box.max.z) / 2;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const toScreenX = (x) => {
-      const p = new THREE.Vector3(x, cy, cz).project(this.camera);
-      return rect.left + (p.x * 0.5 + 0.5) * rect.width;
-    };
-    this.onSwipeReady(true, toScreenX(box.min.x), toScreenX(box.max.x));
+    if (this._arrows) this._arrows.visible = ready;
   }
 
   _raycastFront(e, card) {
@@ -457,9 +494,18 @@ export class CardStack {
 
   dispose() {
     this.disableInput();
+    if (this._arrows) {
+      // Pfeil-Geometrie + -Material gehören NUR den Pfeilen -> freigeben.
+      this._arrowL.geometry.dispose();
+      this._arrowL.material.dispose();
+      this._arrowR.material.dispose();
+      this._arrows = null;
+      this._arrowL = null;
+      this._arrowR = null;
+    }
     if (this.root) {
       this.scene.remove(this.root);
-      // Geometrie + Material sind mit dem Template geteilt -> NICHT disposen.
+      // Karten-Geometrie + -Material sind mit dem Template geteilt -> NICHT disposen.
       this.root = null;
     }
     this.cards = [];

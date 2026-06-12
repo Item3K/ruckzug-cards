@@ -105,7 +105,6 @@ export class RevealSequence {
     // 5) Cross-Fade: Karten SOFORT zeigen, Pack gleichzeitig ausblenden.
     this.cardStack.onProgress = (r, t) => this.ui.setProgress(r, t);
     this.cardStack.onDone = () => this._finish();
-    this.cardStack.onSwipeReady = (ready, leftX, rightX) => this.ui.setArrows(ready, leftX, rightX);
     this.cardStack.begin();
     this.tweens.add({
       duration: PACK_FADE_DURATION,
@@ -150,7 +149,6 @@ export class RevealSequence {
     this.active = false;
     this.cardStack.disableInput();
     this.rotator.detach();
-    this.ui.setArrows(false);
     this.ui.setMode('done');
     this.ui.setStatus(`Fertig — Sanduhren übrig: ${this.result.hourglasses_remaining}`);
   }
@@ -160,7 +158,6 @@ export class RevealSequence {
     this.cardStack.disableInput();
     this.beam.dispose();
     this.cardStack.dispose();
-    this.ui.setArrows(false);
     this.active = false;
     this.result = null;
   }

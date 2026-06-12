@@ -44,6 +44,10 @@ export function createScene(container) {
   fillLight.position.set(-3, 1, -2);
   scene.add(fillLight);
 
+  // --- Zoom sperren (Konzept: fester Kamera-Abstand) ---
+  // Strg+Mausrad löst sonst BROWSER-Zoom aus (skaliert das DOM, verschiebt Overlays).
+  window.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+
   // --- Resize (Kamera-Position bleibt, nur Aspect/Renderer) ---
   function onResize() {
     const w = container.clientWidth;
