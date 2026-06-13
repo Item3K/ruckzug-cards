@@ -91,12 +91,13 @@ async function init() {
   await loadPack(DEFAULT_PACK);
 }
 
-init();
-
 // DEV-ONLY: Live-Tuning-Panel (lil-gui). Dynamischer Import -> faellt im Live-Build
 // (import.meta.env.DEV === false) per Dead-Code-Elimination komplett raus.
-if (import.meta.env.DEV) {
-  import('./tuningPanel.js').then(({ createTuningPanel }) => {
-    createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
-  });
-}
+// Erst NACH init() erzeugen, damit Kamera/Pack fuer evtl. gespeicherte Werte da sind.
+init().then(() => {
+  if (import.meta.env.DEV) {
+    import('./tuningPanel.js').then(({ createTuningPanel }) => {
+      createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
+    });
+  }
+});

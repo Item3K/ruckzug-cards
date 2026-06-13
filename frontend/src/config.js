@@ -60,6 +60,21 @@ export let CARD_VIEW_HEIGHT = 2.4;           // Zielhöhe einer Karte in Weltuni
 export let PACK_OPEN_TIMESCALE = 1.15;       // Abspieltempo der Aufreiß-Animation (>1 = kürzer)
 export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 
+// Default-Snapshot der ursprünglichen Datei-Werte (für Reset im Dev-Panel).
+// Wird bei Modul-Init erfasst -> bleibt unverändert, auch wenn setTuning() später
+// Laufzeit-Werte ändert.
+export const TUNING_DEFAULTS = Object.freeze({
+  SWIPE_DISTANCE_THRESHOLD, SWIPE_FOLLOW_SENSITIVITY, SWIPE_LAUNCH_SPEED,
+  SWIPE_OUT_DISTANCE, SWIPE_RETURN_DURATION, TAP_VS_DRAG_THRESHOLD,
+  STACK_MAX_ANGLE_DEG, STACK_DRAG_SENSITIVITY, STACK_SPRING_STIFFNESS,
+  STACK_SPRING_DAMPING, FLIP_DURATION, FLIP_FORWARD,
+  PACK_SPIN_FRICTION, PACK_DRAG_SENSITIVITY, PACK_SPIN_MAX_SPEED,
+  BEAM_RIP_HEIGHT_FACTOR, BEAM_RIP_X_FACTOR, BEAM_INTENSITY, BEAM_SCALE,
+  CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
+  CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
+  PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
+});
+
 // ============================================================================
 //  Live-Update aus dem Dev-Panel. Schreibt NUR Laufzeit-Werte (nie in die Datei).
 // ============================================================================
