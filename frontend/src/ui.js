@@ -13,24 +13,26 @@
  * @param {()=>void} opts.onOpen
  * @param {()=>void} opts.onBack
  */
-export function createUI({ packs, initialId, onSelectPack, onOpen, onBack }) {
+export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, showPicker = true }) {
   const root = document.createElement('div');
   root.className = 'ui';
 
-  // --- Pack-Auswähler ---
+  // --- Pack-Auswähler (optional; auf der Landing-Page wird das Pack gewählt) ---
   const picker = document.createElement('div');
   picker.className = 'pack-picker';
   const packButtons = new Map();
-  for (const pack of packs) {
-    const btn = document.createElement('button');
-    btn.className = 'pack-btn';
-    btn.textContent = pack.label;
-    btn.addEventListener('click', () => {
-      setActivePack(pack.id);
-      onSelectPack(pack.id);
-    });
-    picker.appendChild(btn);
-    packButtons.set(pack.id, btn);
+  if (showPicker) {
+    for (const pack of packs) {
+      const btn = document.createElement('button');
+      btn.className = 'pack-btn';
+      btn.textContent = pack.label;
+      btn.addEventListener('click', () => {
+        setActivePack(pack.id);
+        onSelectPack(pack.id);
+      });
+      picker.appendChild(btn);
+      packButtons.set(pack.id, btn);
+    }
   }
   function setActivePack(id) {
     packButtons.forEach((b, key) => b.classList.toggle('active', key === id));
@@ -77,6 +79,9 @@ export function createUI({ packs, initialId, onSelectPack, onOpen, onBack }) {
   return {
     setActivePack,
     setMode,
+    setVisible(b) {
+      root.style.display = b ? 'flex' : 'none';
+    },
     setStatus(text) {
       status.textContent = text || '';
     },

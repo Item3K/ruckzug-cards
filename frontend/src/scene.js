@@ -66,8 +66,10 @@ export function createScene(container) {
   }
 
   const clock = new THREE.Clock();
+  let active = true;
   function animate() {
     requestAnimationFrame(animate);
+    if (!active) return;          // pausiert (z.B. während die Landing-Page aktiv ist)
     const delta = clock.getDelta();
     frameCallbacks.forEach((cb) => cb(delta));
     renderer.render(scene, camera);
@@ -76,5 +78,12 @@ export function createScene(container) {
     animate();
   }
 
-  return { scene, camera, renderer, onFrame, start };
+  // Opening-View pausieren/fortsetzen + Canvas ein-/ausblenden.
+  function setActive(b) {
+    active = b;
+    renderer.domElement.style.display = b ? 'block' : 'none';
+    if (b) clock.getDelta(); // aufgelaufene Zeit verwerfen -> kein Sprung
+  }
+
+  return { scene, camera, renderer, onFrame, start, setActive };
 }

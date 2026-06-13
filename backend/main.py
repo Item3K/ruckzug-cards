@@ -50,6 +50,23 @@ class OpenPackRequest(BaseModel):
     user_id: str = Field(..., examples=["test_user_1"])
 
 
+@app.get("/api/collection")
+def collection(user_id: str, set_id: str) -> dict:
+    """Liefert die card_ids, die ein User aus einem Set besitzt (count > 0).
+
+    Das Frontend rechnet daraus den Pack-/Set-Fortschritt aus (gegen die
+    card_defs aus der set_config). Read-only, keine Sanduhren/Würfeln.
+    """
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT uc.card_id FROM user_cards uc "
+            "JOIN card_defs cd ON cd.card_id = uc.card_id "
+            "WHERE uc.user_id = ? AND cd.set_id = ? AND uc.count > 0",
+            (user_id, set_id),
+        ).fetchall()
+    return {"set_id": set_id, "owned": [r["card_id"] for r in rows]}
+
+
 @app.post("/api/open-pack")
 def open_pack(req: OpenPackRequest) -> dict:
     """Öffnet ein Pack serverseitig: zieht Sanduhr, würfelt Karten, verbucht sie.

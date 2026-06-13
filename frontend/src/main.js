@@ -1,7 +1,6 @@
 // RuckZUG Cards — Frontend-Einstieg.
-// Phase 4: Pack laden/drehen/öffnen, Beam, Karten-Reveal.
-// Phase 5a: Packs/Karten kommen aus der modularen Set-Struktur (setLoader),
-//           nicht mehr aus fest verdrahteten Pfaden.
+// Phase 6: Zwei Views — Landing-Page (Pack-Auswahl) und Opening (3D-Flow aus 4/5).
+// Klick auf ein Pack -> Opening; "Zurück zur Auswahl" -> Landing.
 
 import './style.css';
 import { createScene } from './scene.js';
@@ -12,13 +11,14 @@ import { CardStack } from './cardStack.js';
 import { RevealSequence } from './revealSequence.js';
 import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
-import { loadSet } from './setLoader.js';
+import { Landing } from './landingView.js';
+import { applyLandingVars } from './landingConfig.js';
 
-// Welches Set beim Start geladen wird (später: Auswahl/Discovery über index.json).
-const DEFAULT_SET_ID = 'set_ruckzug1';
+applyLandingVars();
 
 const app = document.querySelector('#app');
-const { scene, camera, renderer, onFrame, start } = createScene(app);
+const opening = createScene(app); // { scene, camera, renderer, onFrame, start, setActive }
+const { scene, camera, renderer, onFrame, start } = opening;
 
 const tweens = new TweenManager();
 const rotator = new DragRotator(renderer.domElement);
@@ -34,22 +34,33 @@ onFrame((delta) => {
   rotator.update(delta);
 });
 
-let currentSet = null;
-let packs = [];          // aus dem geladenen Set (siehe init)
 let currentPack = null;
-let ui = null;
-let reveal = null;
+let landing = null;
+let openingPanel = null;
+let landingPanel = null;
+
+// Opening-UI ohne Pack-Auswähler (das Pack wird auf der Landing-Page gewählt);
+// "Zurück zur Auswahl" führt zurück zur Landing-Page.
+const ui = createUI({
+  showPicker: false,
+  onOpen: () => reveal.start(currentPack.backendPackId),
+  onBack: () => enterLanding(),
+});
+
+const reveal = new RevealSequence({
+  viewer, beam, cardStack, rotator, tweens, ui,
+  onAbort: async (msg) => { await loadPack(currentPack); ui.setStatus(msg); },
+});
 
 async function loadPack(pack) {
   currentPack = pack;
-  ui.setActivePack(pack.id);
   ui.setMode('select');
   ui.setOpenEnabled(false);
   ui.setStatus('Lädt …');
   ui.setHint('');
   try {
-    await viewer.load(pack.file); // pack.file = rip-GLB aus der Set-Struktur
-    rotator.attach(viewer.getRotationTarget()); // Pack frei um Y drehbar bis "Öffnen"
+    await viewer.load(pack.file); // rip-GLB aus der Set-Struktur
+    rotator.attach(viewer.getRotationTarget());
     ui.setStatus('');
     ui.setOpenEnabled(true);
   } catch (err) {
@@ -58,47 +69,51 @@ async function loadPack(pack) {
   }
 }
 
-function backToSelection() {
+function showPanels(view) {
+  if (openingPanel) openingPanel.domElement.style.display = view === 'opening' ? '' : 'none';
+  if (landingPanel) landingPanel.domElement.style.display = view === 'landing' ? '' : 'none';
+}
+
+function enterOpening(pack) {
+  landing.setActive(false);
+  opening.setActive(true);
+  ui.setVisible(true);
+  showPanels('opening');
+  loadPack(pack);
+}
+
+function enterLanding() {
   reveal.reset();
-  loadPack(currentPack); // frisches Pack (Frame 0) + Pack-Rotation wieder aktiv
+  opening.setActive(false);
+  ui.setVisible(false);
+  landing.setActive(true);
+  landing.refresh(); // Fortschritt nach dem Opening aktualisieren
+  showPanels('landing');
 }
 
 async function init() {
   start();
-  await cardStack.loadTemplate(); // Karten-Rohling (filet.glb) einmalig vorladen
-  cardStack.prewarm();            // Karten-Material vorab kompilieren (kein Reveal-Ruckler)
+  await cardStack.loadTemplate(); // Karten-Rohling vorladen
+  cardStack.prewarm();
 
-  // --- Set aus der modularen Struktur laden ---
-  currentSet = await loadSet(DEFAULT_SET_ID);
-  // Pack-Liste fürs Frontend aus dem Set ableiten (rip-GLB als anzuzeigendes Modell).
-  packs = currentSet.packs.map((p) => ({
-    id: p.id, label: p.label, file: p.ripUrl, backendPackId: p.backendPackId,
-  }));
-  console.info(`[Set] "${currentSet.name}" geladen: ${packs.length} Packs, ${currentSet.cards.length} Karten-Defs.`);
+  // Opening-View zunächst pausiert/versteckt.
+  opening.setActive(false);
+  ui.setVisible(false);
 
-  // UI + Reveal mit den Set-Packs aufbauen.
-  ui = createUI({
-    packs,
-    initialId: packs[0].id,
-    onSelectPack: (id) => loadPack(packs.find((p) => p.id === id) || packs[0]),
-    onOpen: () => reveal.start(currentPack.backendPackId),
-    onBack: () => backToSelection(),
-  });
-  reveal = new RevealSequence({
-    viewer, beam, cardStack, rotator, tweens, ui,
-    // Bei Fehler (z.B. keine Sanduhren): Pack frisch laden + Fehler sichtbar zeigen.
-    onAbort: async (msg) => { await loadPack(currentPack); ui.setStatus(msg); },
-  });
-
-  await loadPack(packs[0]);
+  // Landing aufbauen + anzeigen (Default-View).
+  landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
+  await landing.build();
+  landing.setActive(true);
 }
 
-// DEV-ONLY: Live-Tuning-Panel (lil-gui). Dynamischer Import -> faellt im Live-Build
-// (import.meta.env.DEV === false) per Dead-Code-Elimination komplett raus.
+// DEV-ONLY: beide Tuning-Panels (3D + Landing-Layout). Im Live-Build per
+// Dead-Code-Elimination raus. Es wird jeweils nur das zur aktiven View gezeigt.
 init().then(() => {
   if (import.meta.env.DEV) {
-    import('./tuningPanel.js').then(({ createTuningPanel }) => {
-      createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
+    Promise.all([import('./tuningPanel.js'), import('./landingPanel.js')]).then(([tp, lp]) => {
+      openingPanel = tp.createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
+      landingPanel = lp.createLandingPanel();
+      showPanels('landing'); // Start ist Landing
     });
   }
 });

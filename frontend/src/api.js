@@ -31,6 +31,17 @@ export async function openPack(packId, userId) {
 }
 
 /**
+ * Liefert die besessenen card_ids eines Users für ein Set (für Fortschritt).
+ * @returns {Promise<{set_id:string, owned:string[]}>}
+ */
+export async function getCollection(userId, setId) {
+  const url = `/api/collection?user_id=${encodeURIComponent(userId)}&set_id=${encodeURIComponent(setId)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`collection HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
  * DEV-ONLY: Sanduhren gutschreiben (damit der Test-Flow nicht an leeren
  * Sanduhren scheitert). Spiegelt /api/dev/give-hourglasses aus 3a.
  * TODO: vor Live entfernen/absichern (gehört zum Dev-Endpoint).
