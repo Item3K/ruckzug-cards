@@ -36,15 +36,19 @@ export async function loadSet(setId) {
   const cfg = await fetchJson(`${base}set_config.json`);
   const resolve = (p) => (p && p.startsWith('/') ? p : base + p);
 
-  const packs = (cfg.packs || []).map((p) => ({
-    id: p.pack_id,
-    label: p.name,
-    ripUrl: resolve(p.rip),
-    idleUrl: resolve(p.idle),
-    // Das Pack heißt im Backend wie seine pack_id (Seed schreibt sie aus dieser Config).
-    backendPackId: p.backend_pack_id || p.pack_id,
-    raw: p,
-  }));
+  // Anzeige-Reihenfolge: Array-Reihenfolge, optionales "order" überschreibt sie.
+  const packs = (cfg.packs || [])
+    .map((p, i) => ({
+      id: p.pack_id,
+      label: p.name,
+      order: typeof p.order === 'number' ? p.order : i,
+      ripUrl: resolve(p.rip),
+      idleUrl: resolve(p.idle),
+      // Das Pack heißt im Backend wie seine pack_id (Seed schreibt sie aus dieser Config).
+      backendPackId: p.backend_pack_id || p.pack_id,
+      raw: p,
+    }))
+    .sort((a, b) => a.order - b.order);
 
   const cards = (cfg.cards || []).map((c) => ({
     id: c.card_id,

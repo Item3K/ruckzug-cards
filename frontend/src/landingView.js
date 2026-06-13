@@ -27,6 +27,8 @@ export class Landing {
     this.sets = [];
     this._packEls = []; // { setId, pack, progressEl }
     this._setEls = [];  // { set, progressEl }
+    this._rows = [];    // .pack-row Elemente (für die Verteilungs-/Überlauf-Berechnung)
+    this._layoutRaf = null;
 
     this.root = el('div', 'landing');
     this.root.appendChild(this._buildTopbar());
@@ -85,6 +87,7 @@ export class Landing {
       container.appendChild(el('h2', 'set-title', set.name));
 
       const row = el('div', 'pack-row');
+      this._rows.push(row);
       for (const pack of set.packs) {
         const tile = el('button', 'pack-tile');
         tile.type = 'button';
@@ -112,7 +115,37 @@ export class Landing {
 
       this.setsEl.appendChild(container);
     }
+
+    // Gleichmäßige Verteilung/Überlauf laufend neu berechnen: bei Größenänderung
+    // der Reihen/Kacheln (ResizeObserver), Fensterwechsel und Layout-Panel-Änderung.
+    this._ro = new ResizeObserver(() => this._scheduleLayout());
+    for (const row of this._rows) {
+      this._ro.observe(row);
+      for (const t of row.children) this._ro.observe(t);
+    }
+    window.addEventListener('resize', () => this._scheduleLayout());
+    window.addEventListener('landing-relayout', () => this._scheduleLayout());
+    this._scheduleLayout();
+
     await this.refresh();
+  }
+
+  _scheduleLayout() {
+    if (this._layoutRaf) return;
+    this._layoutRaf = requestAnimationFrame(() => {
+      this._layoutRaf = null;
+      for (const row of this._rows) this._updateRowLayout(row);
+    });
+  }
+
+  /** Passt alles in die Reihe? Sonst linksbündig + scrollbar (.overflowing). */
+  _updateRowLayout(row) {
+    const tiles = [...row.children];
+    if (!tiles.length) return;
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+    let need = (tiles.length - 1) * gap;
+    for (const t of tiles) need += t.offsetWidth;
+    row.classList.toggle('overflowing', need > row.clientWidth + 0.5);
   }
 
   /** Fortschritts-Zahlen (neu) holen — nach jedem Opening aufrufen. */

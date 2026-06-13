@@ -264,13 +264,21 @@ canvas {
   margin: 0 0 12px;
 }
 
-/* --- Pack-Kacheln (nebeneinander, horizontal scrollbar auf Mobil) --- */
+/* --- Pack-Kacheln: gleichmäßig verteilt + zentriert. --pack-gap ist der
+   MINDESTABSTAND; den Rest verteilt space-evenly automatisch (wenige Packs =
+   großer Abstand, viele = kleiner). Passt nicht alles rein, schaltet JS die
+   Klasse .overflowing -> linksbündig + horizontal scrollbar. --- */
 .pack-row {
   display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-evenly;
   gap: var(--pack-gap);
-  overflow-x: auto;
   padding-bottom: 6px;
   scrollbar-width: thin;
+}
+.pack-row.overflowing {
+  justify-content: flex-start;
+  overflow-x: auto;
 }
 .pack-tile {
   flex: 0 0 var(--pack-tile-w);

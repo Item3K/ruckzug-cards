@@ -26,12 +26,13 @@
     "kiesel":     { "small": { "chance": 0.85, "min": 1, "max": 10 }, "big": { "chance": 0.15, "min": 20, "max": 100 } }
   },
 
+  "_packs_order_DOC": "Anzeige-Reihenfolge auf der Landing-Page = Array-Reihenfolge hier; optionales 'order' (kleiner = weiter links) überschreibt sie.",
   "packs": [
-    { "pack_id": "pack_green",   "name": "Grün",       "rip": "packs/pack_green_rip.glb",   "idle": "packs/pack_green_idle.glb" },
-    { "pack_id": "pack_pink",    "name": "Pink",       "rip": "packs/pack_pink_rip.glb",    "idle": "packs/pack_pink_idle.glb" },
-    { "pack_id": "pack_purple",  "name": "Lila",       "rip": "packs/pack_purple_rip.glb",  "idle": "packs/pack_purple_idle.glb" },
-    { "pack_id": "pack_rainbow", "name": "Regenbogen", "rip": "packs/pack_rainbow_rip.glb", "idle": "packs/pack_rainbow_idle.glb" },
-    { "pack_id": "pack_red",     "name": "Rot",        "rip": "packs/pack_red_rip.glb",     "idle": "packs/pack_red_idle.glb" }
+    { "pack_id": "pack_green",   "name": "Grün",       "order": 1, "rip": "packs/pack_green_rip.glb",   "idle": "packs/pack_green_idle.glb" },
+    { "pack_id": "pack_purple",  "name": "Lila",       "order": 2, "rip": "packs/pack_purple_rip.glb",  "idle": "packs/pack_purple_idle.glb" },
+    { "pack_id": "pack_pink",    "name": "Pink",       "order": 3, "rip": "packs/pack_pink_rip.glb",    "idle": "packs/pack_pink_idle.glb" },
+    { "pack_id": "pack_red",     "name": "Rot",        "order": 4, "rip": "packs/pack_red_rip.glb",     "idle": "packs/pack_red_idle.glb" },
+    { "pack_id": "pack_rainbow", "name": "Regenbogen", "order": 5, "rip": "packs/pack_rainbow_rip.glb", "idle": "packs/pack_rainbow_idle.glb" }
   ],
 
   "cards": [
