@@ -12,6 +12,7 @@ import { openPack } from './api.js';
 import {
   CARD_VIEW_HEIGHT,
   BEAM_RIP_HEIGHT_FACTOR,
+  BEAM_RIP_X_FACTOR,
   PACK_FADE_DURATION,
 } from './config.js';
 
@@ -50,7 +51,11 @@ export class RevealSequence {
     this.ui.setStatus('Öffnet …');
 
     const packH = this.viewer.modelSize.y || 1;
-    const ripPosition = new THREE.Vector3(0, packH * BEAM_RIP_HEIGHT_FACTOR, 0);
+    const ripPosition = new THREE.Vector3(
+      packH * BEAM_RIP_X_FACTOR,
+      packH * BEAM_RIP_HEIGHT_FACTOR,
+      0,
+    );
     const duration = this.viewer.getClipDuration();
 
     // Reveal-Gate: erst zeigen, wenn BEIDES da ist (Animation fertig + Stapel gebaut).
