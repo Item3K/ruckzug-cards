@@ -18,7 +18,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { easeInOutCubic, easeOutCubic } from './tween.js';
 import {
   CARD_STACK_DEPTH,
@@ -42,6 +41,18 @@ const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('/draco/');
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
+
+// Chevron-Icon (lokal, läuft offline) einmal laden und teilen.
+const _texLoader = new THREE.TextureLoader();
+let _chevronTex = null;
+function getChevronTexture() {
+  if (!_chevronTex) {
+    _chevronTex = _texLoader.load('/textures/chevron.svg');
+    _chevronTex.colorSpace = THREE.SRGBColorSpace;
+    _chevronTex.anisotropy = 4;
+  }
+  return _chevronTex;
+}
 
 export class CardStack {
   constructor(scene, camera, renderer, tweens) {
@@ -168,35 +179,20 @@ export class CardStack {
     this._buildArrows(halfWidth);
   }
 
-  /** Zwei pulsierende 3D-Pfeile (schlanke Chevrons ‹ ›) neben der vordersten Karte. */
+  /** Zwei pulsierende Chevron-Icons (3D-Plane mit Textur) neben der Karte. */
   _buildArrows(cardHalfWidth) {
-    // Schlanker Chevron ">" aus zwei dünnen Strichen (nicht gefüllt) -> wirkt
-    // wie das frühere ‹ ›-Design.
-    const h = this.cardHeight * 0.34;   // Gesamthöhe
-    const armW = h * 0.42;
-    const armH = h * 0.5;
-    const thickness = h * 0.1;          // Strichstärke (dünn)
-    const len = Math.hypot(armW, armH);
-    const mkArm = (midY, ang) => {
-      const g = new THREE.PlaneGeometry(len, thickness);
-      g.rotateZ(ang);
-      g.translate(0, midY, 0);
-      return g;
-    };
-    const geo = mergeGeometries([
-      mkArm(armH / 2, Math.atan2(armH, -armW)),   // oberer Strich (Spitze rechts)
-      mkArm(-armH / 2, Math.atan2(-armH, -armW)), // unterer Strich
-    ]);
-
+    const size = this.cardHeight * 0.18; // deutlich kleiner als zuvor
+    const geo = new THREE.PlaneGeometry(size, size);
+    const tex = getChevronTexture();
     const mkMat = () => new THREE.MeshBasicMaterial({
-      color: 0xe8eef7, transparent: true, opacity: 0.6,
-      depthTest: false, depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+      map: tex, transparent: true, opacity: 0.6,
+      depthTest: false, depthWrite: false, toneMapped: false,
     });
-    this._arrowR = new THREE.Mesh(geo, mkMat());
+    this._arrowR = new THREE.Mesh(geo, mkMat());        // zeigt nach rechts
     this._arrowL = new THREE.Mesh(geo, mkMat());
-    this._arrowL.rotation.z = Math.PI; // zeigt nach links
+    this._arrowL.scale.x = -1;                          // gespiegelt -> zeigt nach links
 
-    const gap = this.cardHeight * 0.14;
+    const gap = this.cardHeight * 0.1;
     this._arrowGapX = cardHalfWidth + gap;
     const z = this.cardHeight * 0.05; // leicht vor der Karte
     this._arrowR.position.set(this._arrowGapX, 0, z);
