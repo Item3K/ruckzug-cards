@@ -51,8 +51,8 @@ export const PACK_SPIN_MAX_SPEED = 20;   // rad/s Deckel
 // Höhe der Beam-Spitze relativ zur Pack-Mitte (× Pack-Höhe). Kleiner/negativer
 // = tiefer am Riss. (Verlauf: ... -> -0.30 -> -0.40 -> -0.46 -> -0.52)
 export const BEAM_RIP_HEIGHT_FACTOR = -0.52;
-// Horizontale Verschiebung der Beam-Spitze (× Pack-Höhe). Negativ = nach links.
-export const BEAM_RIP_X_FACTOR = -0.03;
+// Horizontale Verschiebung der Beam-Spitze (× Pack-Höhe). Negativ = links, positiv = rechts.
+export const BEAM_RIP_X_FACTOR = 0.0;
 
 // --- Stapel-Optik -----------------------------------------------------------
 // Minimaler Tiefen-Versatz pro Karte (× Kartenhöhe). Die Karten liegen fast

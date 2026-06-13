@@ -74,17 +74,16 @@ export class Beam {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,   // §6
-      depthTest: true,     // Pack verdeckt den Beam, bis es aufreißt
+      depthTest: false,    // immer sichtbar (nicht hinter dem Pack verschwinden)
       opacity: 0,
       side: THREE.DoubleSide,
       toneMapped: false,   // Beam soll knallen, nicht vom Tone-Mapping gedämpft
     });
 
     this.mesh = new THREE.Mesh(geo, this.material);
-    // Spitze an den Riss, leicht HINTER das Pack (kleineres z = weg von der Kamera).
+    // Spitze an den Riss, auf Pack-Tiefe (mittig, da wo das Pack ist).
     this.mesh.position.copy(ripPosition);
-    this.mesh.position.z -= packHeight * 0.15;
-    this.mesh.renderOrder = -1; // hinter den Karten/Pack einsortiert
+    this.mesh.renderOrder = 1; // über dem Pack additiv leuchten
     this.scene.add(this.mesh);
 
     this._baseScale = 1;
