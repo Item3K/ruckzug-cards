@@ -81,14 +81,13 @@ function attachDoubleTap(eln, cb) {
 async function loadPack(pack) {
   currentPack = pack;
   ui.setMode('select');
-  ui.setOpenEnabled(false);
   ui.setStatus('Lädt …');
   ui.setHint('');
   try {
     await viewer.load(pack.file); // rip-GLB aus der Set-Struktur
     rotator.attach(viewer.getRotationTarget());
     ui.setStatus('');
-    ui.setOpenEnabled(true);
+    ui.setHint('Doppeltippen zum Öffnen · ziehen zum Drehen');
   } catch (err) {
     console.error('Pack konnte nicht geladen werden:', err);
     ui.setStatus('Fehler beim Laden');

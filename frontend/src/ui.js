@@ -46,27 +46,12 @@ export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, 
   const status = document.createElement('div');
   status.className = 'status';
 
-  // --- Aktionen unten ---
-  const actions = document.createElement('div');
-  actions.className = 'actions';
-
-  const openBtn = document.createElement('button');
-  openBtn.className = 'open-btn';
-  openBtn.textContent = 'Öffnen';
-  openBtn.addEventListener('click', () => onOpen());
-
-  const backBtn = document.createElement('button');
-  backBtn.className = 'back-btn';
-  backBtn.textContent = 'Zurück zur Auswahl';
-  backBtn.addEventListener('click', () => onBack());
-
-  actions.appendChild(openBtn);
-  actions.appendChild(backBtn);
+  // Hinweis: Öffnen läuft über Doppel-Tap aufs Pack, Zurück über Auto-Return
+  // (nach der letzten Karte) — daher KEINE Öffnen-/Zurück-Buttons mehr.
 
   root.appendChild(picker);
   root.appendChild(hint);
   root.appendChild(status);
-  root.appendChild(actions);
   document.body.appendChild(root);
 
   setActivePack(initialId);
@@ -91,8 +76,8 @@ export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, 
     setProgress(revealed, total) {
       status.textContent = `Karte ${Math.min(revealed + 1, total)} / ${total}`;
     },
-    setOpenEnabled(enabled) {
-      openBtn.disabled = !enabled;
+    setOpenEnabled() {
+      // No-op: kein Öffnen-Button mehr (Öffnen via Doppel-Tap).
     },
   };
 }

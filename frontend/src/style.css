@@ -144,11 +144,7 @@ canvas {
 }
 
 /* --- Modus-Sichtbarkeit --- */
-/* Standard: Auswahl. Picker + Öffnen sichtbar, Back versteckt. */
-.ui[data-mode='select'] .back-btn,
-.ui[data-mode='select'] .hint {
-  display: none;
-}
+/* Auswahl: nur der Doppel-Tap-Hinweis (Buttons gibt es nicht mehr). */
 
 /* Öffnen läuft: nichts Bedienbares außer Status. */
 .ui[data-mode='opening'] .pack-picker,
