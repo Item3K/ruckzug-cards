@@ -176,6 +176,7 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
   hat das Set“. Duplikate ab 10 → UnbelievaBoat-Währung tauschen. Set-Abschluss- und
   set-übergreifende Quest-Belohnungen.
 - **Friends-Reiter:** andere OAuth-User auflisten, deren Sammlung ansehen.
+- **Trading-Reiter:** Trading-Requests zwischen Nutzern stellen/annehmen (Details später).
 - **Profil-Card-Display:** persönliche Vitrine, 1–10 selbst gewählte Karten.
 
 ---
@@ -198,12 +199,20 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
   (idle+rip GLBs, card_back, shared/pack-Karten). Backend-Würfeln auf Slot-System (§7)
   umstellen. Karten-Rohling + austauschbare Front-Textur (Platzhalter bis echte Motive da).
 - **Phase 6 — Landing-Page.** Sets/Packs mit Idle-Rotation, „X/Y Exklusive“, Klick → Opening.
+  Dazu ein **UI-Tuning-Panel** (analog zum 3D-Dev-Panel aus 4c, nur Dev-Build): Position,
+  Größe, Abstände der UI-Felder live per Regler justierbar, mit Export der Werte. Gilt für
+  Landing-Page und später für Dex/Friends/Profil-Ansichten.
 - **Phase 7 — Dex / Sammlung.** Ansicht §8, besessene/fehlende Karten, Pack-Ursprung,
   Duplikat-Tausch, Set-/Quest-Belohnungen.
 - **Phase 8 — Discord OAuth.** Ersetzt den user_id-Platzhalter aus Phase 3a; echte
-  Anmeldung; Grundlage für Friends & persönliche Daten.
+  Anmeldung; Grundlage für Friends & persönliche Daten. **Außerdem hier:** Dev-/Tuning-Panels
+  (3D-Panel aus 4c, UI-Panel aus Phase 6) von „nur Dev-Build" umstellen auf „im Live-Build
+  vorhanden, aber nur für die Admin-user_id sichtbar". Gleicher Admin-Gate-Mechanismus wie
+  das Admin-Interface (Phase 13).
 - **Phase 9 — Friends + Profil-Card-Display.** User-Liste, fremde Sammlungen ansehen,
   persönliche Vitrine (1–10 Karten).
+- **Phase 9b — Trading.** Trading-Requests zwischen Nutzern (Karten tauschen). Mechanik/
+  Regeln bei Phasenbeginn festlegen. Menüpunkt existiert ab Phase 6 als Platzhalter.
 - **Phase 10 — Wertkarten & Minispiel-Anbindung.** Small/Big-Roll serverseitig; API-Patch
   zu Farm (Beeren/Muscheln/Kiesel) und UnbelievaBoat (Hue-Tokens).
 - **Phase 11 — Holo-Shader.** Winkelabhängiger Glitzer; zwei Masken-Typen (Holo/Reverse).
@@ -212,13 +221,20 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
 - **Phase 13 — Admin-Interface.** Oberfläche zum Verwalten von Sets/Packs/Karten/
   Wahrscheinlichkeiten/Card-Display (statt Hand-Editieren der Configs). Offen: schreibt es
   Configs oder DB — bei Phasenbeginn klären.
+- **Phase 13b — Sound.** Soundeffekte für Pack-Opening (Ratsch/Aufreißen, Beam-Peak,
+  Jackpot) und UI (Klicks, Hover, Reveal). Sauberes Audio-Handling: Preload, Lautstärke,
+  Mute-Option, mobil-tauglich (Audio erst nach User-Interaktion starten). Sounds modular
+  ablegen (Ressourcen-Ordner), damit austauschbar.
+- **Phase 13c — Theming & Polish.** White/Dark-Mode-Umschalter (Farben über CSS-Variablen,
+  Auswahl gespeichert). Gestaltete Hintergründe (allgemein und/oder pro Set). Allgemeiner
+  visueller Feinschliff der UI-Flächen.
 - **Phase 14 — Migration auf den Pi & Deployment.** Bot+DBs+Assets auf den Pi; Cloudflare
   Tunnel; Auto-Start; Deploy-Skript; nächtliches Backup auf die Synology.
 
 ---
 
 ## 10. Tech-Stack (Kurzreferenz)
-- Bot: Python, discord.py, aiosqlite, Dockers
+- Bot: Python, discord.py, aiosqlite, Docker
 - Web-Backend: Python, FastAPI, sqlite (WAL), Discord OAuth
 - Frontend: Three.js + Vite, GLB, lil-gui (Dev)
 - Infra: Raspberry Pi 4 (SD→SSD), Synology (Backup), Cloudflare Tunnel
