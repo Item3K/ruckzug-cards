@@ -34,6 +34,7 @@ export class IdlePacks {
     this.active = false;
     this._raf = null;
     this._clock = new THREE.Clock();
+    this._master = 0; // gemeinsame Master-Zeit für ALLE Idle-Mixer (Synchron-Takt)
     this._onResize = () => this.renderer.setSize(window.innerWidth, window.innerHeight, false);
     window.addEventListener('resize', this._onResize);
     this._onResize();
@@ -68,9 +69,12 @@ export class IdlePacks {
     item.model = model;
 
     // Idle-Animation abspielen (die GLB rotiert). Fallback: sanfte Y-Drehung.
+    // Explizit LoopRepeat, damit setTime(masterTime) mit großer Zeit sauber umläuft.
     if (gltf.animations[0]) {
       item.mixer = new THREE.AnimationMixer(model);
-      item.mixer.clipAction(gltf.animations[0]).play();
+      const action = item.mixer.clipAction(gltf.animations[0]);
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.play();
     }
     return item;
   }
@@ -87,7 +91,10 @@ export class IdlePacks {
   _loop() {
     this._raf = requestAnimationFrame(() => this._loop());
     if (!this.active) { this._raf = null; return; }
-    const dt = this._clock.getDelta();
+    // Master-Zeit (nur aktive Zeit) -> wird ALLEN Mixern zugewiesen, damit alle
+    // Packs unabhängig von der Ladereihenfolge im selben Takt/Phasenstand drehen.
+    this._master += this._clock.getDelta();
+    const t = this._master;
     const r = this.renderer;
     const H = this.canvas.clientHeight;
 
@@ -103,8 +110,10 @@ export class IdlePacks {
       if (rect.bottom <= 0 || rect.top >= window.innerHeight || rect.width <= 0 || rect.height <= 0) {
         continue;
       }
-      if (it.mixer) it.mixer.update(dt);
-      else it.model.rotation.y += dt * 0.6;
+      // Absolute Master-Zeit setzen (statt pro Pack zu akkumulieren) -> Synchron-
+      // Takt; ein gerade sichtbar werdendes Pack springt sofort auf die Phase.
+      if (it.mixer) it.mixer.setTime(t);
+      else it.model.rotation.y = t * 0.6;
 
       const w = rect.width;
       const h = rect.height;
