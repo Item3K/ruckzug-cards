@@ -1,0 +1,85 @@
+{
+  "set_id": "set_ruckzug1",
+  "name": "RuckZUG Set 1",
+  "card_back": "card_back.png",
+  "card_blank_model": "/models/cards/filet.glb",
+
+  "rarities": ["common", "rare", "ultra_rare", "rainbow_rare"],
+  "finishes": ["normal", "holo", "reverse_holo", "full_art", "full_art_holo"],
+
+  "_value_card_rolls_TODO": "Phase 5b/10: Small/Big-Roll je Wertkarten-Typ (ROADMAP §7). Werte unten sind Platzhalter-Defaults.",
+  "value_card_rolls": {
+    "hue_tokens": { "small": { "chance": 0.8, "min": 5, "max": 50 }, "big": { "chance": 0.2, "min": 100, "max": 1000 } },
+    "beeren":     { "small": { "chance": 0.85, "min": 1, "max": 10 }, "big": { "chance": 0.15, "min": 20, "max": 100 } },
+    "muscheln":   { "small": { "chance": 0.85, "min": 1, "max": 10 }, "big": { "chance": 0.15, "min": 20, "max": 100 } },
+    "kiesel":     { "small": { "chance": 0.85, "min": 1, "max": 10 }, "big": { "chance": 0.15, "min": 20, "max": 100 } }
+  },
+
+  "packs": [
+    {
+      "pack_id": "pack_green",
+      "name": "Grün",
+      "rip": "packs/pack_green_rip.glb",
+      "idle": "packs/pack_green_idle.glb",
+      "backend_pack_id": "pack_wald",
+      "_draw_TODO": "Phase 5b: Slot-System (ROADMAP §7). Werte sind Platzhalter.",
+      "draw": {
+        "cards_per_pack": 10,
+        "slots": [
+          { "slots": "1-6", "pool": "common" },
+          { "slots": "7-8", "pool": "common", "rare_chance": 0.1, "value_card_chance": 0.05 },
+          { "slots": "9", "pool": "rare", "finish_chance": 0.1 },
+          { "slots": "10", "pool": "hit", "finish_table": { "normal_rare": 70, "holo": 15, "reverse_holo": 10, "full_art": 4, "full_art_holo": 1 }, "ultra_value_chance": 0.01 }
+        ]
+      }
+    },
+    {
+      "pack_id": "pack_pink",
+      "name": "Pink",
+      "rip": "packs/pack_pink_rip.glb",
+      "idle": "packs/pack_pink_idle.glb",
+      "backend_pack_id": "pack_wald",
+      "_draw_TODO": "Phase 5b: Slot-System. Platzhalter.",
+      "draw": { "cards_per_pack": 10, "slots": [] }
+    },
+    {
+      "pack_id": "pack_purple",
+      "name": "Lila",
+      "rip": "packs/pack_purple_rip.glb",
+      "idle": "packs/pack_purple_idle.glb",
+      "backend_pack_id": "pack_wald",
+      "_draw_TODO": "Phase 5b: Slot-System. Platzhalter.",
+      "draw": { "cards_per_pack": 10, "slots": [] }
+    },
+    {
+      "pack_id": "pack_rainbow",
+      "name": "Regenbogen",
+      "rip": "packs/pack_rainbow_rip.glb",
+      "idle": "packs/pack_rainbow_idle.glb",
+      "backend_pack_id": "pack_meer",
+      "_draw_TODO": "Phase 5b: Slot-System. Platzhalter.",
+      "draw": { "cards_per_pack": 10, "slots": [] }
+    },
+    {
+      "pack_id": "pack_red",
+      "name": "Rot",
+      "rip": "packs/pack_red_rip.glb",
+      "idle": "packs/pack_red_idle.glb",
+      "backend_pack_id": "pack_meer",
+      "_draw_TODO": "Phase 5b: Slot-System. Platzhalter.",
+      "draw": { "cards_per_pack": 10, "slots": [] }
+    }
+  ],
+
+  "cards": [
+    { "card_id": "rz1_shared_01", "name": "Testkarte Shared 1", "set_id": "set_ruckzug1", "rarity": "common", "finish": "normal", "pack_exclusive_to": null, "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_shared_02", "name": "Testkarte Shared 2", "set_id": "set_ruckzug1", "rarity": "common", "finish": "normal", "pack_exclusive_to": null, "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_shared_03", "name": "Testkarte Shared 3", "set_id": "set_ruckzug1", "rarity": "rare", "finish": "normal", "pack_exclusive_to": null, "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_shared_04", "name": "Testkarte Shared 4", "set_id": "set_ruckzug1", "rarity": "rare", "finish": "holo", "pack_exclusive_to": null, "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_green_excl", "name": "Grün-Exklusiv", "set_id": "set_ruckzug1", "rarity": "ultra_rare", "finish": "full_art", "pack_exclusive_to": "pack_green", "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_pink_excl", "name": "Pink-Exklusiv", "set_id": "set_ruckzug1", "rarity": "ultra_rare", "finish": "full_art", "pack_exclusive_to": "pack_pink", "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_purple_excl", "name": "Lila-Exklusiv", "set_id": "set_ruckzug1", "rarity": "ultra_rare", "finish": "full_art", "pack_exclusive_to": "pack_purple", "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_rainbow_excl", "name": "Regenbogen-Exklusiv", "set_id": "set_ruckzug1", "rarity": "rainbow_rare", "finish": "full_art_holo", "pack_exclusive_to": "pack_rainbow", "asset": "cards/shared/filet_placeholder.png" },
+    { "card_id": "rz1_red_excl", "name": "Rot-Exklusiv", "set_id": "set_ruckzug1", "rarity": "ultra_rare", "finish": "full_art", "pack_exclusive_to": "pack_red", "asset": "cards/shared/filet_placeholder.png" }
+  ]
+}

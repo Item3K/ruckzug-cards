@@ -1,6 +1,7 @@
 // RuckZUG Cards — Frontend-Einstieg.
-// Phase 4a: Pack laden, drehen, aufreißen.
-// Phase 4b: feste Kamera + Objekte rotieren, Beam, Karten-Reveal (vorne/hinten).
+// Phase 4: Pack laden/drehen/öffnen, Beam, Karten-Reveal.
+// Phase 5a: Packs/Karten kommen aus der modularen Set-Struktur (setLoader),
+//           nicht mehr aus fest verdrahteten Pfaden.
 
 import './style.css';
 import { createScene } from './scene.js';
@@ -11,17 +12,10 @@ import { CardStack } from './cardStack.js';
 import { RevealSequence } from './revealSequence.js';
 import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
+import { loadSet } from './setLoader.js';
 
-// Visuelle Packs (GLBs). backendPackId: welches Pack im Backend geöffnet wird
-// (3a-Seed kennt nur pack_wald + pack_meer). TODO: echtes Mapping, wenn Sets final.
-const PACKS = [
-  { id: 'green',   label: 'Grün',       file: '/models/pack_green.glb',   backendPackId: 'pack_wald' },
-  { id: 'pink',    label: 'Pink',       file: '/models/pack_pink.glb',    backendPackId: 'pack_wald' },
-  { id: 'purple',  label: 'Lila',       file: '/models/pack_purple.glb',  backendPackId: 'pack_wald' },
-  { id: 'rainbow', label: 'Regenbogen', file: '/models/pack_rainbow.glb', backendPackId: 'pack_meer' },
-  { id: 'red',     label: 'Rot',        file: '/models/pack_red.glb',     backendPackId: 'pack_meer' },
-];
-const DEFAULT_PACK = PACKS[0];
+// Welches Set beim Start geladen wird (später: Auswahl/Discovery über index.json).
+const DEFAULT_SET_ID = 'set_ruckzug1';
 
 const app = document.querySelector('#app');
 const { scene, camera, renderer, onFrame, start } = createScene(app);
@@ -40,25 +34,11 @@ onFrame((delta) => {
   rotator.update(delta);
 });
 
-let currentPack = DEFAULT_PACK;
-
-const ui = createUI({
-  packs: PACKS,
-  initialId: DEFAULT_PACK.id,
-  onSelectPack: (id) => loadPack(PACKS.find((p) => p.id === id) || DEFAULT_PACK),
-  onOpen: () => reveal.start(currentPack.backendPackId),
-  onBack: () => backToSelection(),
-});
-
-const reveal = new RevealSequence({
-  viewer, beam, cardStack, rotator, tweens, ui,
-  // Bei Fehler (z.B. keine Sanduhren): Pack frisch laden (es wurde parallel zur
-  // Animation schon angerissen) und danach den Fehler sichtbar anzeigen.
-  onAbort: async (msg) => {
-    await loadPack(currentPack);
-    ui.setStatus(msg);
-  },
-});
+let currentSet = null;
+let packs = [];          // aus dem geladenen Set (siehe init)
+let currentPack = null;
+let ui = null;
+let reveal = null;
 
 async function loadPack(pack) {
   currentPack = pack;
@@ -68,9 +48,8 @@ async function loadPack(pack) {
   ui.setStatus('Lädt …');
   ui.setHint('');
   try {
-    await viewer.load(pack.file);
-    // Pack frei um Y drehbar (360°, keine Feder) — bis "Öffnen".
-    rotator.attach(viewer.getRotationTarget());
+    await viewer.load(pack.file); // pack.file = rip-GLB aus der Set-Struktur
+    rotator.attach(viewer.getRotationTarget()); // Pack frei um Y drehbar bis "Öffnen"
     ui.setStatus('');
     ui.setOpenEnabled(true);
   } catch (err) {
@@ -86,14 +65,36 @@ function backToSelection() {
 
 async function init() {
   start();
-  await cardStack.loadTemplate(); // filet.glb einmalig vorladen (alle Karten teilen es)
+  await cardStack.loadTemplate(); // Karten-Rohling (filet.glb) einmalig vorladen
   cardStack.prewarm();            // Karten-Material vorab kompilieren (kein Reveal-Ruckler)
-  await loadPack(DEFAULT_PACK);
+
+  // --- Set aus der modularen Struktur laden ---
+  currentSet = await loadSet(DEFAULT_SET_ID);
+  // Pack-Liste fürs Frontend aus dem Set ableiten (rip-GLB als anzuzeigendes Modell).
+  packs = currentSet.packs.map((p) => ({
+    id: p.id, label: p.label, file: p.ripUrl, backendPackId: p.backendPackId,
+  }));
+  console.info(`[Set] "${currentSet.name}" geladen: ${packs.length} Packs, ${currentSet.cards.length} Karten-Defs.`);
+
+  // UI + Reveal mit den Set-Packs aufbauen.
+  ui = createUI({
+    packs,
+    initialId: packs[0].id,
+    onSelectPack: (id) => loadPack(packs.find((p) => p.id === id) || packs[0]),
+    onOpen: () => reveal.start(currentPack.backendPackId),
+    onBack: () => backToSelection(),
+  });
+  reveal = new RevealSequence({
+    viewer, beam, cardStack, rotator, tweens, ui,
+    // Bei Fehler (z.B. keine Sanduhren): Pack frisch laden + Fehler sichtbar zeigen.
+    onAbort: async (msg) => { await loadPack(currentPack); ui.setStatus(msg); },
+  });
+
+  await loadPack(packs[0]);
 }
 
 // DEV-ONLY: Live-Tuning-Panel (lil-gui). Dynamischer Import -> faellt im Live-Build
 // (import.meta.env.DEV === false) per Dead-Code-Elimination komplett raus.
-// Erst NACH init() erzeugen, damit Kamera/Pack fuer evtl. gespeicherte Werte da sind.
 init().then(() => {
   if (import.meta.env.DEV) {
     import('./tuningPanel.js').then(({ createTuningPanel }) => {
