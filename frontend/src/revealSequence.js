@@ -15,22 +15,25 @@ import {
   BEAM_RIP_HEIGHT_FACTOR,
   BEAM_RIP_X_FACTOR,
   PACK_FADE_DURATION,
+  AUTO_RETURN_DELAY,
 } from './config.js';
 
 const USER_ID = 'test_user_1'; // Platzhalter bis OAuth (Phase 3b)
 
 export class RevealSequence {
-  constructor({ viewer, beam, cardStack, rotator, tweens, ui, onAbort }) {
+  constructor({ viewer, beam, cardStack, rotator, tweens, ui, onAbort, onComplete }) {
     this.viewer = viewer;
     this.beam = beam;
     this.cardStack = cardStack;
     this.rotator = rotator;
     this.tweens = tweens;
     this.ui = ui;
-    this.onAbort = onAbort; // (message) => void: Pack frisch laden + Fehler zeigen
+    this.onAbort = onAbort;       // (message) => void: Pack frisch laden + Fehler zeigen
+    this.onComplete = onComplete; // () => void: nach der letzten Karte (Auto-Zurück)
     this.active = false;
     this.result = null;
     this.mode = 'hinten';
+    this._autoReturnTimer = null;
   }
 
   async start(backendPackId) {
@@ -162,9 +165,17 @@ export class RevealSequence {
     this.rotator.detach();
     this.ui.setMode('done');
     this.ui.setStatus(`Fertig — Sanduhren übrig: ${this.result.hourglasses_remaining}`);
+    // Auto-Rückkehr zur Landing-Page nach kurzer Verzögerung (Button bleibt manuell).
+    if (this.onComplete) {
+      this._autoReturnTimer = setTimeout(() => {
+        this._autoReturnTimer = null;
+        this.onComplete();
+      }, AUTO_RETURN_DELAY * 1000);
+    }
   }
 
   reset() {
+    if (this._autoReturnTimer) { clearTimeout(this._autoReturnTimer); this._autoReturnTimer = null; }
     this.rotator.detach();
     this.cardStack.disableInput();
     this.beam.dispose();

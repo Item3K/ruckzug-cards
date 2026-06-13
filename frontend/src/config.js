@@ -60,6 +60,10 @@ export let CARD_VIEW_HEIGHT = 2.4;           // Zielhöhe einer Karte in Weltuni
 export let PACK_OPEN_TIMESCALE = 1.15;       // Abspieltempo der Aufreiß-Animation (>1 = kürzer)
 export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 
+// --- Bedienung --------------------------------------------------------------
+export let DOUBLE_TAP_MS = 350;              // max. Abstand zweier Taps für Doppel-Tap (Öffnen)
+export let AUTO_RETURN_DELAY = 2.0;          // Sekunden bis Auto-Rückkehr nach der letzten Karte
+
 // Default-Snapshot der ursprünglichen Datei-Werte (für Reset im Dev-Panel).
 // Wird bei Modul-Init erfasst -> bleibt unverändert, auch wenn setTuning() später
 // Laufzeit-Werte ändert.
@@ -73,6 +77,7 @@ export const TUNING_DEFAULTS = Object.freeze({
   CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
+  DOUBLE_TAP_MS, AUTO_RETURN_DELAY,
 });
 
 // ============================================================================
@@ -108,6 +113,8 @@ const _setters = {
   CARD_VIEW_HEIGHT: (v) => { CARD_VIEW_HEIGHT = v; },
   PACK_OPEN_TIMESCALE: (v) => { PACK_OPEN_TIMESCALE = v; },
   PACK_FADE_DURATION: (v) => { PACK_FADE_DURATION = v; },
+  DOUBLE_TAP_MS: (v) => { DOUBLE_TAP_MS = v; },
+  AUTO_RETURN_DELAY: (v) => { AUTO_RETURN_DELAY = v; },
 };
 
 export function setTuning(key, value) {

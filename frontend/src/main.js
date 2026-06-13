@@ -13,6 +13,7 @@ import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
 import { applyLandingVars } from './landingConfig.js';
+import { DOUBLE_TAP_MS, TAP_VS_DRAG_THRESHOLD } from './config.js';
 
 applyLandingVars();
 
@@ -50,7 +51,32 @@ const ui = createUI({
 const reveal = new RevealSequence({
   viewer, beam, cardStack, rotator, tweens, ui,
   onAbort: async (msg) => { await loadPack(currentPack); ui.setStatus(msg); },
+  onComplete: () => enterLanding(), // Auto-Zurück nach der letzten Karte
 });
+
+// Doppelklick / Doppel-Tap auf das Pack (Opening-Canvas) startet das Öffnen.
+// Einzelklick/Drag dreht weiter (DragRotator); ein Drag zählt nicht als Tap.
+// Die Seite (vorne/hinten) bestimmt reveal.start im Moment des Doppel-Taps.
+attachDoubleTap(renderer.domElement, () => {
+  if (currentPack) reveal.start(currentPack.backendPackId);
+});
+
+function attachDoubleTap(eln, cb) {
+  let downX = 0; let downY = 0; let lastT = 0; let lastX = 0; let lastY = 0;
+  eln.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+  eln.addEventListener('pointerup', (e) => {
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > TAP_VS_DRAG_THRESHOLD) {
+      lastT = 0; return; // war ein Drag (Drehen) -> kein Tap
+    }
+    const now = performance.now();
+    if (now - lastT < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 40) {
+      lastT = 0;
+      cb();
+    } else {
+      lastT = now; lastX = e.clientX; lastY = e.clientY;
+    }
+  });
+}
 
 async function loadPack(pack) {
   currentPack = pack;
