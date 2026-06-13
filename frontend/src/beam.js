@@ -6,6 +6,7 @@
 // selten = weißer Beam, jackpot = goldener Beam (heller, größer).
 
 import * as THREE from 'three';
+import { BEAM_INTENSITY, BEAM_SCALE } from './config.js';
 
 const BEAM_TEX = {
   selten: '/textures/beam_weiss_4k.png',
@@ -61,7 +62,9 @@ export class Beam {
       return;
     }
 
-    const height = packHeight * 2.2 * this._params.scale;
+    // BEAM_SCALE/BEAM_INTENSITY live aus der Config (Dev-Panel) übernehmen.
+    this._peak = this._params.peak * BEAM_INTENSITY;
+    const height = packHeight * 2.2 * this._params.scale * BEAM_SCALE;
     const width = height * 0.5;
     const geo = new THREE.PlaneGeometry(width, height);
     // Pivot an die Spitze legen: Geometrie so verschieben, dass die untere
@@ -102,8 +105,8 @@ export class Beam {
 
     // Opacity: schnell auf (Riss-Moment), dann langsam ab.
     let opacity;
-    if (p < 0.2) opacity = (p / 0.2) * this._params.peak;
-    else opacity = this._params.peak * (1 - (p - 0.2) / 0.8);
+    if (p < 0.2) opacity = (p / 0.2) * this._peak;
+    else opacity = this._peak * (1 - (p - 0.2) / 0.8);
     this.material.opacity = Math.max(0, opacity);
 
     // Skalierung: von klein auf groß wachsen lassen.

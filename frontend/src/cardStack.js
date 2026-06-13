@@ -33,6 +33,9 @@ import {
   STACK_SPRING_DAMPING,
   FLIP_DURATION,
   FLIP_FORWARD,
+  ARROW_SIZE_FACTOR,
+  ARROW_GAP_FACTOR,
+  ARROW_COLOR,
 } from './config.js';
 
 const BACK_MATERIAL = 'Material.001';
@@ -181,18 +184,20 @@ export class CardStack {
 
   /** Zwei pulsierende Chevron-Icons (3D-Plane mit Textur) neben der Karte. */
   _buildArrows(cardHalfWidth) {
-    const size = this.cardHeight * 0.18; // deutlich kleiner als zuvor
+    this._cardHalfWidth = cardHalfWidth; // für späteren Live-Rebuild merken
+    const size = this.cardHeight * ARROW_SIZE_FACTOR;
     const geo = new THREE.PlaneGeometry(size, size);
     const tex = getChevronTexture();
+    const color = new THREE.Color(ARROW_COLOR);
     const mkMat = () => new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, opacity: 0.6,
+      map: tex, color, transparent: true, opacity: 0.6,
       depthTest: false, depthWrite: false, toneMapped: false,
     });
     this._arrowR = new THREE.Mesh(geo, mkMat());        // zeigt nach rechts
     this._arrowL = new THREE.Mesh(geo, mkMat());
     this._arrowL.scale.x = -1;                          // gespiegelt -> zeigt nach links
 
-    const gap = this.cardHeight * 0.1;
+    const gap = this.cardHeight * ARROW_GAP_FACTOR;
     this._arrowGapX = cardHalfWidth + gap;
     const z = this.cardHeight * 0.05; // leicht vor der Karte
     this._arrowR.position.set(this._arrowGapX, 0, z);
@@ -204,6 +209,26 @@ export class CardStack {
     this._arrowL.renderOrder = 999;
     this._arrowR.renderOrder = 999;
     this.root.add(this._arrows);
+  }
+
+  /** Pfeile mit aktuellen Config-Werten neu aufbauen (Dev-Panel, live). */
+  rebuildArrows() {
+    if (!this.root || !this._arrows) return;
+    const wasVisible = this._arrows.visible;
+    this._disposeArrows();
+    this._buildArrows(this._cardHalfWidth || 0.5);
+    this._arrows.visible = wasVisible;
+  }
+
+  _disposeArrows() {
+    if (!this._arrows) return;
+    this._arrowL.geometry.dispose();
+    this._arrowL.material.dispose();
+    this._arrowR.material.dispose();
+    this.root.remove(this._arrows);
+    this._arrows = null;
+    this._arrowL = null;
+    this._arrowR = null;
   }
 
   /** Stapel einblenden (er ist bereits korrekt aufgebaut). */
@@ -498,15 +523,7 @@ export class CardStack {
 
   dispose() {
     this.disableInput();
-    if (this._arrows) {
-      // Pfeil-Geometrie + -Material gehören NUR den Pfeilen -> freigeben.
-      this._arrowL.geometry.dispose();
-      this._arrowL.material.dispose();
-      this._arrowR.material.dispose();
-      this._arrows = null;
-      this._arrowL = null;
-      this._arrowR = null;
-    }
+    this._disposeArrows(); // Pfeil-Geometrie/-Material gehören nur den Pfeilen
     if (this.root) {
       this.scene.remove(this.root);
       // Karten-Geometrie + -Material sind mit dem Template geteilt -> NICHT disposen.

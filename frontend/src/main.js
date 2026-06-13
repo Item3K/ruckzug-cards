@@ -92,3 +92,11 @@ async function init() {
 }
 
 init();
+
+// DEV-ONLY: Live-Tuning-Panel (lil-gui). Dynamischer Import -> faellt im Live-Build
+// (import.meta.env.DEV === false) per Dead-Code-Elimination komplett raus.
+if (import.meta.env.DEV) {
+  import('./tuningPanel.js').then(({ createTuningPanel }) => {
+    createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
+  });
+}
