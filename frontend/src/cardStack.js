@@ -57,6 +57,23 @@ function getChevronTexture() {
   return _chevronTex;
 }
 
+// Per-Karte Front-Material (Motiv-PNG), gecached pro Asset-URL -> Karten mit
+// gleichem Motiv teilen ein Material. Geklont vom Rohling-Front-Material, nur die
+// map (Textur) wird getauscht; die Rückseite bleibt die gemeinsame card_back.
+const _frontMatCache = new Map();
+function frontMaterialFor(url, baseMat) {
+  if (!url || !baseMat) return baseMat;
+  if (_frontMatCache.has(url)) return _frontMatCache.get(url);
+  const mat = baseMat.clone();
+  const tex = _texLoader.load(url);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = baseMat.map ? baseMat.map.flipY : false; // gleiche UV-Orientierung wie GLB-Textur
+  mat.map = tex;
+  mat.needsUpdate = true;
+  _frontMatCache.set(url, mat);
+  return mat;
+}
+
 export class CardStack {
   constructor(scene, camera, renderer, tweens) {
     this.scene = scene;
@@ -119,6 +136,8 @@ export class CardStack {
 
     this._normalizeTemplate(tpl, backMesh, frontMesh);
     this.template = tpl;
+    // Front-Material des Rohlings merken — Basis für die per-Karte Front-Texturen.
+    this._frontTemplateMat = frontMesh ? frontMesh.material : null;
   }
 
   /**
@@ -161,8 +180,15 @@ export class CardStack {
 
     this.cards = serverCards.map((sc, i) => {
       const holder = new THREE.Group();
-      const card = this.template.clone(true); // teilt Geometrie + Material
-      // TODO(echte Assets): pro Karte Front-Material klonen und map = sc.asset setzen.
+      const card = this.template.clone(true); // teilt Geometrie + (Back-)Material
+      // Front-Textur (Motiv) der gezogenen Karte auflegen; Rückseite bleibt gemeinsam.
+      if (sc.assetUrl) {
+        card.traverse((o) => {
+          if (o.isMesh && o.material && o.material.name !== BACK_MATERIAL) {
+            o.material = frontMaterialFor(sc.assetUrl, this._frontTemplateMat);
+          }
+        });
+      }
       holder.add(card);
       holder.rotation.y = baseRotY;
       holder.position.copy(this._slotPosition(i));

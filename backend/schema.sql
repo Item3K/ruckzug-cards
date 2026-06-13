@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS packs (
     set_id      TEXT NOT NULL,
     name        TEXT NOT NULL,
     asset       TEXT,                          -- Pfad/Key zu GLB + Texturen
+    draw_config TEXT,                          -- JSON: Slot-Würfel-Konfig (aus set_config.json)
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (set_id) REFERENCES sets (set_id) ON DELETE CASCADE
 );
@@ -38,9 +39,10 @@ CREATE TABLE IF NOT EXISTS card_defs (
     card_id            TEXT PRIMARY KEY,
     set_id             TEXT NOT NULL,
     name               TEXT NOT NULL,
-    rarity             TEXT NOT NULL DEFAULT 'common',  -- common | rare | epic | legendary
-    pack_exclusive_to  TEXT,                            -- NULL = Basis-Karte
-    asset              TEXT,                            -- Pfad/Key zum Kartenbild
+    rarity             TEXT NOT NULL DEFAULT 'common',  -- common | rare | ultra_rare | rainbow_rare
+    finish             TEXT NOT NULL DEFAULT 'normal',  -- normal | holo | reverse_holo | full_art | full_art_holo
+    pack_exclusive_to  TEXT,                            -- NULL = Basis-Karte (set-weit)
+    asset              TEXT,                            -- Pfad zur Front-PNG (relativ zum Set-Ordner)
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (set_id)            REFERENCES sets  (set_id)  ON DELETE CASCADE,
     FOREIGN KEY (pack_exclusive_to) REFERENCES packs (pack_id) ON DELETE SET NULL

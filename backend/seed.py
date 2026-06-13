@@ -1,103 +1,93 @@
-"""Seed-Skript für RuckZUG Cards (Phase 1).
+"""Seed-Skript für RuckZUG Cards (Phase 5b).
 
-Füllt die cards.db mit Testdaten, damit wir etwas zum Anschauen/Entwickeln haben:
-- 1 Test-Set ("Tiere")
-- 2 Packs in diesem Set
-- ein paar Karten: Basis-Karten (set-weit) + pro Pack eine pack-exklusive Karte
-
-Idempotent dank ``INSERT OR REPLACE`` auf festen Slug-IDs — mehrfaches Ausführen
-erzeugt keine Duplikate. Setzt voraus, dass init_db.py vorher lief (Tabellen da).
+Quelle der Wahrheit für Set/Packs/Karten ist die set_config.json im Frontend
+(frontend/public/sets/<set>/set_config.json). Dieses Skript liest sie ein und
+überträgt Set, Packs (inkl. Slot-Würfel-Konfig als draw_config) und card_defs
+(inkl. finish) in die cards.db. Die alten "Tiere"-Testdaten entfallen.
 
 Aufruf::
 
-    python backend/seed.py        # oder aus dem backend-Ordner: python seed.py
+    python seed.py        # aus dem backend-Ordner
+
+Hinweis: Wenn sich das Schema geändert hat (neue Spalten finish/draw_config),
+die cards.db neu erzeugen: alte Datei löschen, dann python init_db.py + python seed.py.
 """
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import db
 
-# --- Testdaten ---------------------------------------------------------------
-SET = {
-    "set_id": "set_tiere",
-    "name": "Tiere",
-    "description": "Test-Set für Phase 1 (Entwicklung).",
-    "total_cards": 6,
-    "sort_order": 1,
-}
+# Welche(s) Set(s) in die DB gespiegelt werden (Ordnernamen unter sets/).
+SET_IDS = ["set_ruckzug1"]
 
-PACKS = [
-    {"pack_id": "pack_wald", "set_id": "set_tiere", "name": "Waldpack", "asset": "packs/wald.glb"},
-    {"pack_id": "pack_meer", "set_id": "set_tiere", "name": "Meerpack", "asset": "packs/meer.glb"},
-]
+# Pfad zur Set-Struktur im Frontend (Quelle der Wahrheit).
+_SETS_DIR = Path(__file__).resolve().parent.parent / "frontend" / "public" / "sets"
 
-# pack_exclusive_to = None -> Basis-Karte (aus jedem Pack des Sets ziehbar)
-CARDS = [
-    # Basis-Karten (set-weit)
-    {"card_id": "card_fuchs",  "set_id": "set_tiere", "name": "Fuchs",  "rarity": "common", "pack_exclusive_to": None,        "asset": "cards/fuchs.webp"},
-    {"card_id": "card_hase",   "set_id": "set_tiere", "name": "Hase",   "rarity": "common", "pack_exclusive_to": None,        "asset": "cards/hase.webp"},
-    {"card_id": "card_eule",   "set_id": "set_tiere", "name": "Eule",   "rarity": "rare",   "pack_exclusive_to": None,        "asset": "cards/eule.webp"},
-    # Pack-exklusiv: nur aus dem Waldpack
-    {"card_id": "card_hirsch", "set_id": "set_tiere", "name": "Hirsch", "rarity": "epic",   "pack_exclusive_to": "pack_wald", "asset": "cards/hirsch.webp"},
-    # Pack-exklusiv: nur aus dem Meerpack
-    {"card_id": "card_hai",    "set_id": "set_tiere", "name": "Hai",    "rarity": "epic",      "pack_exclusive_to": "pack_meer", "asset": "cards/hai.webp"},
-    {"card_id": "card_wal",    "set_id": "set_tiere", "name": "Blauwal","rarity": "legendary", "pack_exclusive_to": "pack_meer", "asset": "cards/wal.webp"},
-]
+# Test-User mit Sanduhren, damit /api/open-pack lokal sofort testbar ist.
+TEST_USERS = [{"user_id": "test_user_1", "count": 10}]
 
-# Quest-VORLAGEN (ohne User-Bezug). Per-User-Fortschritt entsteht später in
-# quest_progress, sobald echte User mitspielen — daher hier nur Definitionen.
-QUEST_DEFS = [
-    {"quest_id": "quest_tiere_sammler", "name": "Tier-Sammler", "description": "Sammle 15 verschiedene Tiere.",
-     "goal_count": 15, "reward_type": "hourglasses", "reward_amount": 3, "active": 1},
-]
 
-# Test-User mit Sanduhren, damit man /api/open-pack lokal sofort testen kann.
-# INSERT OR REPLACE setzt den Bestand bei jedem Seed-Lauf auf diesen Baseline-Wert.
-# (Echte User entstehen später per OAuth in Phase 3b.)
-TEST_USERS = [
-    {"user_id": "test_user_1", "count": 10},
-]
+def _load_set_config(set_id: str) -> dict:
+    path = _SETS_DIR / set_id / "set_config.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def seed_set(conn, set_id: str) -> tuple[int, int]:
+    cfg = _load_set_config(set_id)
+    cards = cfg.get("cards", [])
+    packs = cfg.get("packs", [])
+    default_draw = cfg.get("default_draw")
+
+    conn.execute(
+        "INSERT OR REPLACE INTO sets (set_id, name, description, total_cards, sort_order) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (cfg["set_id"], cfg["name"], cfg.get("description", cfg["name"]), len(cards), 1),
+    )
+
+    for p in packs:
+        # Effektive Würfel-Konfig: eigenes pack['draw'] sonst set-weites default_draw.
+        draw = p.get("draw") or default_draw
+        conn.execute(
+            "INSERT OR REPLACE INTO packs (pack_id, set_id, name, asset, draw_config) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (p["pack_id"], cfg["set_id"], p["name"], p.get("rip"),
+             json.dumps(draw) if draw is not None else None),
+        )
+
+    for c in cards:
+        conn.execute(
+            "INSERT OR REPLACE INTO card_defs "
+            "(card_id, set_id, name, rarity, finish, pack_exclusive_to, asset) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (c["card_id"], c.get("set_id", cfg["set_id"]), c["name"],
+             c.get("rarity", "common"), c.get("finish", "normal"),
+             c.get("pack_exclusive_to"), c.get("asset")),
+        )
+
+    return len(packs), len(cards)
 
 
 def seed() -> None:
     with db.connection() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO sets (set_id, name, description, total_cards, sort_order) "
-            "VALUES (:set_id, :name, :description, :total_cards, :sort_order)",
-            SET,
-        )
-        conn.executemany(
-            "INSERT OR REPLACE INTO packs (pack_id, set_id, name, asset) "
-            "VALUES (:pack_id, :set_id, :name, :asset)",
-            PACKS,
-        )
-        conn.executemany(
-            "INSERT OR REPLACE INTO card_defs "
-            "(card_id, set_id, name, rarity, pack_exclusive_to, asset) "
-            "VALUES (:card_id, :set_id, :name, :rarity, :pack_exclusive_to, :asset)",
-            CARDS,
-        )
-        conn.executemany(
-            "INSERT OR REPLACE INTO quest_defs "
-            "(quest_id, name, description, goal_count, reward_type, reward_amount, active) "
-            "VALUES (:quest_id, :name, :description, :goal_count, :reward_type, :reward_amount, :active)",
-            QUEST_DEFS,
-        )
+        total_packs = total_cards = 0
+        for set_id in SET_IDS:
+            np, nc = seed_set(conn, set_id)
+            total_packs += np
+            total_cards += nc
+            print(f"Set '{set_id}': {np} Packs, {nc} Karten-Defs eingespielt.")
+
         conn.executemany(
             "INSERT OR REPLACE INTO hourglasses (user_id, count, updated_at) "
             "VALUES (:user_id, :count, datetime('now'))",
             TEST_USERS,
         )
 
-    print("Seed eingespielt:")
-    print(f"  Sets : 1  ({SET['name']})")
-    print(f"  Packs: {len(PACKS)}  ({', '.join(p['name'] for p in PACKS)})")
-    base = sum(1 for c in CARDS if c['pack_exclusive_to'] is None)
-    excl = len(CARDS) - base
-    print(f"  Karten: {len(CARDS)}  ({base} Basis, {excl} pack-exklusiv)")
-    print(f"  Quest-Vorlagen: {len(QUEST_DEFS)}  ({', '.join(q['name'] for q in QUEST_DEFS)})")
-    users_desc = ', '.join(f"{u['user_id']}={u['count']} Sanduhren" for u in TEST_USERS)
-    print(f"  Test-User: {len(TEST_USERS)}  ({users_desc})")
+    users_desc = ", ".join(f"{u['user_id']}={u['count']} Sanduhren" for u in TEST_USERS)
+    print(f"Gesamt: {total_packs} Packs, {total_cards} Karten-Defs.")
+    print(f"Test-User: {users_desc}")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { openPack } from './api.js';
+import { resolveSetAsset } from './setLoader.js';
 import {
   CARD_VIEW_HEIGHT,
   BEAM_RIP_HEIGHT_FACTOR,
@@ -95,9 +96,14 @@ export class RevealSequence {
       onComplete: () => this.beam.show(result.beam_stage, ripPosition, packH),
     });
 
+    // Asset-Pfade der gezogenen Karten zu ladbaren URLs auflösen (Front-PNG).
+    const cards = result.drawn_cards.map((c) => ({
+      ...c, assetUrl: resolveSetAsset(c.set_id, c.asset),
+    }));
+
     // 4) Stapel JETZT (während der Animation) versteckt vorbauen — die teure Arbeit
     //    (Klonen + Material schon vorkompiliert) überlappt die Ripp-Animation.
-    this.cardStack.build(result.drawn_cards, this.mode, CARD_VIEW_HEIGHT, true);
+    this.cardStack.build(cards, this.mode, CARD_VIEW_HEIGHT, true);
     this._stackReady = true;
     this._tryReveal();
   }

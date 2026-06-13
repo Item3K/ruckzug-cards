@@ -15,6 +15,12 @@ async function fetchJson(url) {
   return res.json();
 }
 
+/** Löst einen (set-relativen) Asset-Pfad zu einer ladbaren URL auf. */
+export function resolveSetAsset(setId, path) {
+  if (!path) return null;
+  return path.startsWith('/') ? path : `${SETS_BASE}/${setId}/${path}`;
+}
+
 /** Liste der registrierten Set-Ordnernamen. */
 export async function loadSetIndex() {
   const idx = await fetchJson(`${SETS_BASE}/index.json`);
@@ -35,8 +41,8 @@ export async function loadSet(setId) {
     label: p.name,
     ripUrl: resolve(p.rip),
     idleUrl: resolve(p.idle),
-    backendPackId: p.backend_pack_id,
-    draw: p.draw || null,          // Platzhalter bis Phase 5b (Slot-System)
+    // Das Pack heißt im Backend wie seine pack_id (Seed schreibt sie aus dieser Config).
+    backendPackId: p.backend_pack_id || p.pack_id,
     raw: p,
   }));
 
