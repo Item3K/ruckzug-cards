@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { easeInOutCubic, easeOutCubic } from './tween.js';
 import {
   CARD_STACK_DEPTH,
@@ -167,18 +168,25 @@ export class CardStack {
     this._buildArrows(halfWidth);
   }
 
-  /** Zwei pulsierende 3D-Pfeile links/rechts neben der vordersten Karte. */
+  /** Zwei pulsierende 3D-Pfeile (schlanke Chevrons ‹ ›) neben der vordersten Karte. */
   _buildArrows(cardHalfWidth) {
-    const h = this.cardHeight * 0.32;
-    const w = h * 0.72;
-    // Dreieck, das nach +x (rechts) zeigt.
-    const shape = new THREE.Shape();
-    shape.moveTo(0, h / 2);
-    shape.lineTo(0, -h / 2);
-    shape.lineTo(w, 0);
-    shape.lineTo(0, h / 2);
-    const geo = new THREE.ShapeGeometry(shape);
-    geo.translate(-w / 2, 0, 0); // um eigene Mitte
+    // Schlanker Chevron ">" aus zwei dünnen Strichen (nicht gefüllt) -> wirkt
+    // wie das frühere ‹ ›-Design.
+    const h = this.cardHeight * 0.34;   // Gesamthöhe
+    const armW = h * 0.42;
+    const armH = h * 0.5;
+    const thickness = h * 0.1;          // Strichstärke (dünn)
+    const len = Math.hypot(armW, armH);
+    const mkArm = (midY, ang) => {
+      const g = new THREE.PlaneGeometry(len, thickness);
+      g.rotateZ(ang);
+      g.translate(0, midY, 0);
+      return g;
+    };
+    const geo = mergeGeometries([
+      mkArm(armH / 2, Math.atan2(armH, -armW)),   // oberer Strich (Spitze rechts)
+      mkArm(-armH / 2, Math.atan2(-armH, -armW)), // unterer Strich
+    ]);
 
     const mkMat = () => new THREE.MeshBasicMaterial({
       color: 0xe8eef7, transparent: true, opacity: 0.6,
