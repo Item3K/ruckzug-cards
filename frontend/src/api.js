@@ -44,16 +44,33 @@ export async function getCollection(setId) {
   return jsonOrThrow(await fetch(`/api/collection?set_id=${encodeURIComponent(setId)}`));
 }
 
-// --- DEV-ONLY ---
+// --- Admin (Phase 13a, nur für Admins — serverseitig erzwungen) ---
+function postJson(url, body) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(jsonOrThrow);
+}
+/** Liste aller bekannten User mit Sanduhr-/Karten-Beständen. */
+export async function adminListUsers() {
+  return jsonOrThrow(await fetch('/api/admin/users'));
+}
+/** Sanduhren setzen (mode 'set', absolut) oder ändern (mode 'add', +/-). */
+export async function adminSetHourglasses(userId, mode, amount) {
+  return postJson('/api/admin/hourglasses', { user_id: userId, mode, amount });
+}
+/** Einem User eine Karte (Anzahl) gutschreiben. */
+export async function adminGiveCard(userId, cardId, count) {
+  return postJson('/api/admin/cards/give', { user_id: userId, card_id: cardId, count });
+}
+/** Einem User eine Karte (Anzahl) abziehen (nicht unter 0). */
+export async function adminTakeCard(userId, cardId, count) {
+  return postJson('/api/admin/cards/take', { user_id: userId, card_id: cardId, count });
+}
+
+// --- DEV-ONLY (nur aktiv, wenn das Backend DEV_ENDPOINTS gesetzt hat) ---
 /** DEV: ohne Discord als Test-User einloggen (lokales Testen). */
 export async function devLogin(userId = 'test_user_1') {
   return jsonOrThrow(await fetch(`/api/dev/login?user_id=${encodeURIComponent(userId)}`, { method: 'POST' }));
-}
-/** DEV: Sanduhren gutschreiben. */
-export async function devGiveHourglasses(userId, amount) {
-  return jsonOrThrow(await fetch('/api/dev/give-hourglasses', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId, amount }),
-  }));
 }

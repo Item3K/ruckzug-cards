@@ -35,6 +35,17 @@ load_dotenv()  # .env (Projektwurzel oder backend/) laden
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-insecure-change-me")
 
+# Admin-Identifikation: kommaseparierte Discord-user_ids in .env (mehrere möglich).
+ADMIN_USER_IDS = {
+    s.strip() for s in os.getenv("ADMIN_USER_IDS", "").split(",") if s.strip()
+}
+# Dev-Endpoints (z.B. /api/dev/login) nur, wenn DEV_ENDPOINTS gesetzt ist.
+DEV_ENDPOINTS = os.getenv("DEV_ENDPOINTS", "").lower() in {"1", "true", "yes", "on"}
+
+
+def is_admin(user_id: str | None) -> bool:
+    return bool(user_id) and user_id in ADMIN_USER_IDS
+
 app = FastAPI(title="RuckZUG Cards API", version="0.8.0")
 
 # Session-Cookie: signiert, HttpOnly, SameSite=lax. https_only nur, wenn das
@@ -62,6 +73,26 @@ def require_user(request: Request) -> str:
     if not uid:
         raise HTTPException(status_code=401, detail="Nicht eingeloggt.")
     return uid
+
+
+def require_admin(request: Request) -> str:
+    """user_id aus der Session UND in ADMIN_USER_IDS; sonst 401/403. Serverseitig erzwungen."""
+    uid = require_user(request)
+    if not is_admin(uid):
+        raise HTTPException(status_code=403, detail="Kein Admin-Zugriff.")
+    return uid
+
+
+def _record_login(user_id: str, username: str | None) -> None:
+    """Login in app_users festhalten (für die Admin-User-Liste)."""
+    with db.connection() as conn:
+        conn.execute(
+            "INSERT INTO app_users (user_id, username, first_login, last_login) "
+            "VALUES (?, ?, datetime('now'), datetime('now')) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "username = excluded.username, last_login = datetime('now')",
+            (user_id, username),
+        )
 
 
 @app.get("/health")
@@ -94,8 +125,11 @@ async def auth_callback(request: Request, code: str | None = None, state: str | 
         user = await auth.exchange_code(code)
     except Exception:
         raise HTTPException(502, "Token-Tausch mit Discord fehlgeschlagen.")
-    request.session["user_id"] = str(user["id"])
-    request.session["username"] = user.get("global_name") or user.get("username") or "Discord-User"
+    uid = str(user["id"])
+    uname = user.get("global_name") or user.get("username") or "Discord-User"
+    request.session["user_id"] = uid
+    request.session["username"] = uname
+    _record_login(uid, uname)
     return RedirectResponse(FRONTEND_URL)
 
 
@@ -113,6 +147,7 @@ def me(request: Request) -> dict:
         "logged_in": bool(uid),
         "user_id": uid,
         "username": request.session.get("username"),
+        "is_admin": is_admin(uid),
     }
 
 
@@ -149,34 +184,121 @@ def open_pack(req: OpenPackRequest, request: Request) -> dict:
 
 
 # =====================================================================
-# DEV-ONLY Helfer
-# TODO: vor Live ENTFERNEN oder hinter Admin-Auth absichern!
+# Admin (Phase 13a) — ALLE Endpoints hinter require_admin (serverseitig erzwungen).
+# Sanduhren-/Karten-Verwaltung; ersetzt den alten /api/dev/give-hourglasses.
 # =====================================================================
-class GiveHourglassesRequest(BaseModel):
-    user_id: str = Field(..., examples=["test_user_1"])
-    amount: int = Field(..., gt=0, examples=[5])
-
-
-@app.post("/api/dev/give-hourglasses")
-def dev_give_hourglasses(req: GiveHourglassesRequest) -> dict:
-    """DEV-ONLY: schreibt einem User Sanduhren gut."""
+@app.get("/api/admin/users")
+def admin_users(request: Request) -> dict:
+    """Alle bekannten User (eingeloggt / mit Sanduhren / mit Karten) + Bestände."""
+    require_admin(request)
     with db.connection() as conn:
+        rows = conn.execute(
+            """
+            WITH ids AS (
+                SELECT user_id FROM app_users
+                UNION SELECT user_id FROM hourglasses
+                UNION SELECT user_id FROM user_cards
+            )
+            SELECT i.user_id AS user_id,
+                   au.username AS username,
+                   au.last_login AS last_login,
+                   COALESCE(h.count, 0) AS hourglasses,
+                   COALESCE((SELECT COUNT(*) FROM user_cards uc
+                             WHERE uc.user_id = i.user_id AND uc.count > 0), 0) AS card_count
+            FROM ids i
+            LEFT JOIN app_users au ON au.user_id = i.user_id
+            LEFT JOIN hourglasses h ON h.user_id = i.user_id
+            ORDER BY au.last_login DESC NULLS LAST, i.user_id
+            """
+        ).fetchall()
+    return {"users": [dict(r) for r in rows]}
+
+
+class AdminHourglassesRequest(BaseModel):
+    user_id: str
+    mode: str = Field("set", pattern="^(set|add)$")  # 'set' = absolut, 'add' = +/- Betrag
+    amount: int
+
+
+@app.post("/api/admin/hourglasses")
+def admin_hourglasses(req: AdminHourglassesRequest, request: Request) -> dict:
+    """Sanduhren setzen (absolut) oder ändern (+/-). Floor bei 0."""
+    require_admin(request)
+    with db.connection() as conn:
+        cur = conn.execute(
+            "SELECT count FROM hourglasses WHERE user_id = ?", (req.user_id,)
+        ).fetchone()
+        current = cur["count"] if cur else 0
+        new_val = req.amount if req.mode == "set" else current + req.amount
+        new_val = max(0, new_val)
         conn.execute(
             "INSERT INTO hourglasses (user_id, count, updated_at) "
             "VALUES (?, ?, datetime('now')) "
-            "ON CONFLICT(user_id) DO UPDATE SET "
+            "ON CONFLICT(user_id) DO UPDATE SET count = excluded.count, updated_at = datetime('now')",
+            (req.user_id, new_val),
+        )
+    return {"user_id": req.user_id, "hourglasses": new_val}
+
+
+class AdminCardRequest(BaseModel):
+    user_id: str
+    card_id: str
+    count: int = Field(1, gt=0)
+
+
+@app.post("/api/admin/cards/give")
+def admin_cards_give(req: AdminCardRequest, request: Request) -> dict:
+    """Einer user_id eine Karte (Anzahl) gutschreiben."""
+    require_admin(request)
+    with db.connection() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM card_defs WHERE card_id = ?", (req.card_id,)
+        ).fetchone()
+        if not exists:
+            raise HTTPException(404, f"card_id '{req.card_id}' existiert nicht.")
+        conn.execute(
+            "INSERT INTO user_cards (user_id, card_id, count, updated_at) "
+            "VALUES (?, ?, ?, datetime('now')) "
+            "ON CONFLICT(user_id, card_id) DO UPDATE SET "
             "count = count + excluded.count, updated_at = datetime('now')",
-            (req.user_id, req.amount),
+            (req.user_id, req.card_id, req.count),
         )
         new_count = conn.execute(
-            "SELECT count FROM hourglasses WHERE user_id = ?", (req.user_id,)
+            "SELECT count FROM user_cards WHERE user_id = ? AND card_id = ?",
+            (req.user_id, req.card_id),
         ).fetchone()["count"]
-    return {"user_id": req.user_id, "hourglasses": new_count}
+    return {"user_id": req.user_id, "card_id": req.card_id, "count": new_count}
 
 
+@app.post("/api/admin/cards/take")
+def admin_cards_take(req: AdminCardRequest, request: Request) -> dict:
+    """Einer user_id eine Karte (Anzahl) abziehen (nicht unter 0)."""
+    require_admin(request)
+    with db.connection() as conn:
+        cur = conn.execute(
+            "SELECT count FROM user_cards WHERE user_id = ? AND card_id = ?",
+            (req.user_id, req.card_id),
+        ).fetchone()
+        new_count = max(0, (cur["count"] if cur else 0) - req.count)
+        conn.execute(
+            "INSERT INTO user_cards (user_id, card_id, count, updated_at) "
+            "VALUES (?, ?, ?, datetime('now')) "
+            "ON CONFLICT(user_id, card_id) DO UPDATE SET "
+            "count = excluded.count, updated_at = datetime('now')",
+            (req.user_id, req.card_id, new_count),
+        )
+    return {"user_id": req.user_id, "card_id": req.card_id, "count": new_count}
+
+
+# =====================================================================
+# DEV-ONLY (nur aktiv, wenn DEV_ENDPOINTS gesetzt ist)
+# =====================================================================
 @app.post("/api/dev/login")
 def dev_login(request: Request, user_id: str = "test_user_1") -> dict:
-    """DEV-ONLY: loggt ohne Discord als Test-User ein (lokales Testen ohne OAuth)."""
+    """DEV-ONLY: loggt ohne Discord als Test-User ein (lokales Testen)."""
+    if not DEV_ENDPOINTS:
+        raise HTTPException(404, "Nicht verfügbar.")
     request.session["user_id"] = user_id
     request.session["username"] = f"DEV {user_id}"
+    _record_login(user_id, f"DEV {user_id}")
     return {"logged_in": True, "user_id": user_id, "username": f"DEV {user_id}"}

@@ -24,6 +24,7 @@ export class Landing {
     this.idle = new IdlePacks();
     this.me = { logged_in: false };
     this.onAuthChange = null; // (me) => void, gesetzt von main (für die Opening-Gate)
+    this.onOpenAdmin = null;  // () => void, gesetzt von main (Admin-Menüpunkt)
     this.sets = [];
     this._packEls = []; // { setId, pack, progressEl }
     this._setEls = [];  // { set, progressEl }
@@ -68,6 +69,17 @@ export class Landing {
       b.addEventListener('click', () => { menu.hidden = true; this._openPlaceholder(label); });
       menu.appendChild(b);
     }
+
+    // Admin-Eintrag — nur sichtbar, wenn der eingeloggte User Admin ist
+    // (refreshAuth schaltet ihn frei). Der Zugriff selbst ist serverseitig erzwungen.
+    this._adminBtn = el('button', 'admin-link', 'Admin');
+    this._adminBtn.hidden = true;
+    this._adminBtn.addEventListener('click', () => {
+      menu.hidden = true;
+      if (this.onOpenAdmin) this.onOpenAdmin();
+    });
+    menu.appendChild(this._adminBtn);
+
     burger.addEventListener('click', () => { menu.hidden = !menu.hidden; });
 
     right.appendChild(burger);
@@ -86,6 +98,7 @@ export class Landing {
       this._userLabel.textContent = '';
       this._authBtn.textContent = 'Mit Discord anmelden';
     }
+    this._adminBtn.hidden = !this.me.is_admin; // Admin-Menüpunkt nur für Admins
     if (this.onAuthChange) this.onAuthChange(this.me);
     return this.me;
   }

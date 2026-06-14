@@ -12,6 +12,7 @@ import { RevealSequence } from './revealSequence.js';
 import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
+import { Admin } from './adminView.js';
 import { applyLandingVars } from './landingConfig.js';
 import { DOUBLE_TAP_MS, TAP_VS_DRAG_THRESHOLD } from './config.js';
 
@@ -38,6 +39,7 @@ onFrame((delta) => {
 let currentPack = null;
 let loggedIn = false;     // Login-Status (von der Landing via onAuthChange)
 let landing = null;
+let admin = null;
 let openingPanel = null;
 let landingPanel = null;
 
@@ -119,6 +121,32 @@ function enterLanding() {
   showPanels('landing');
 }
 
+// --- Admin (/admin) ---
+// Die eigentliche Zugriffskontrolle ist serverseitig (require_admin -> 403);
+// admin.open() prüft is_admin und zeigt sonst „Kein Zugriff".
+function enterAdmin(push = true) {
+  if (push && window.location.pathname !== '/admin') {
+    window.history.pushState({}, '', '/admin');
+  }
+  opening.setActive(false);
+  ui.setVisible(false);
+  landing.setActive(false);
+  admin.open();
+}
+
+function exitAdmin() {
+  admin.hide();
+  if (window.location.pathname === '/admin') {
+    window.history.pushState({}, '', '/');
+  }
+  enterLanding();
+}
+
+window.addEventListener('popstate', () => {
+  if (window.location.pathname === '/admin') enterAdmin(false);
+  else { admin.hide(); enterLanding(); }
+});
+
 async function init() {
   start();
   await cardStack.loadTemplate(); // Karten-Rohling vorladen
@@ -128,11 +156,18 @@ async function init() {
   opening.setActive(false);
   ui.setVisible(false);
 
+  // Admin-View (versteckt, bis geöffnet).
+  admin = new Admin({ onClose: () => exitAdmin() });
+
   // Landing aufbauen + anzeigen (Default-View).
   landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
   landing.onAuthChange = (me) => { loggedIn = !!me.logged_in; }; // vor build(), damit der erste refreshAuth greift
+  landing.onOpenAdmin = () => enterAdmin();
   await landing.build();
   landing.setActive(true);
+
+  // Deep-Link: direkt auf /admin geladen -> Admin öffnen (Gate prüft serverseitig).
+  if (window.location.pathname === '/admin') enterAdmin(false);
 }
 
 // DEV-ONLY: beide Tuning-Panels (3D + Landing-Layout). Im Live-Build per

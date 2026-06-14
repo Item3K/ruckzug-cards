@@ -116,3 +116,15 @@ CREATE TABLE IF NOT EXISTS quest_progress (
     FOREIGN KEY (quest_id) REFERENCES quest_defs (quest_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_questprogress_quest ON quest_progress (quest_id);
+
+-- =====================================================================
+-- app_users — wer hat sich je auf der Website eingeloggt (Phase 8/13a)
+--   Wird bei jedem Login (OAuth + Dev) per UPSERT aktualisiert. Basis für die
+--   Admin-User-Liste. (Nicht zu verwechseln mit der alten database.db.users.)
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS app_users (
+    user_id      TEXT PRIMARY KEY,
+    username     TEXT,
+    first_login  TEXT NOT NULL DEFAULT (datetime('now')),
+    last_login   TEXT NOT NULL DEFAULT (datetime('now'))
+);
