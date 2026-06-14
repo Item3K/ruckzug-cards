@@ -17,7 +17,7 @@ async function jsonOrThrow(res) {
 }
 
 // --- Auth ---
-/** Aktueller Login-Status: { logged_in, user_id, username }. */
+/** Aktueller Login-Status: { logged_in, user_id, username, is_admin, avatar_url, hourglasses }. */
 export async function getMe() {
   return jsonOrThrow(await fetch('/api/me'));
 }
@@ -52,9 +52,13 @@ function postJson(url, body) {
     body: JSON.stringify(body),
   }).then(jsonOrThrow);
 }
-/** Liste aller bekannten User mit Sanduhr-/Karten-Beständen. */
+/** Liste aller bekannten User mit Sanduhr-/Karten-Beständen + Avatar. */
 export async function adminListUsers() {
   return jsonOrThrow(await fetch('/api/admin/users'));
+}
+/** Besitz-Anzahl je Karte für EINEN User: { cards: { card_id: count } }. */
+export async function adminUserCards(userId) {
+  return jsonOrThrow(await fetch(`/api/admin/user-cards?user_id=${encodeURIComponent(userId)}`));
 }
 /** Sanduhren setzen (mode 'set', absolut) oder ändern (mode 'add', +/-). */
 export async function adminSetHourglasses(userId, mode, amount) {
@@ -67,10 +71,4 @@ export async function adminGiveCard(userId, cardId, count) {
 /** Einem User eine Karte (Anzahl) abziehen (nicht unter 0). */
 export async function adminTakeCard(userId, cardId, count) {
   return postJson('/api/admin/cards/take', { user_id: userId, card_id: cardId, count });
-}
-
-// --- DEV-ONLY (nur aktiv, wenn das Backend DEV_ENDPOINTS gesetzt hat) ---
-/** DEV: ohne Discord als Test-User einloggen (lokales Testen). */
-export async function devLogin(userId = 'test_user_1') {
-  return jsonOrThrow(await fetch(`/api/dev/login?user_id=${encodeURIComponent(userId)}`, { method: 'POST' }));
 }

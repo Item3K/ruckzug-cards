@@ -39,12 +39,23 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-insecure-change-me")
 ADMIN_USER_IDS = {
     s.strip() for s in os.getenv("ADMIN_USER_IDS", "").split(",") if s.strip()
 }
-# Dev-Endpoints (z.B. /api/dev/login) nur, wenn DEV_ENDPOINTS gesetzt ist.
-DEV_ENDPOINTS = os.getenv("DEV_ENDPOINTS", "").lower() in {"1", "true", "yes", "on"}
 
 
 def is_admin(user_id: str | None) -> bool:
     return bool(user_id) and user_id in ADMIN_USER_IDS
+
+
+def avatar_url(user_id: str | None, avatar_hash: str | None) -> str:
+    """Discord-CDN-URL des Avatars; Fallback auf den Discord-Default-Avatar."""
+    if user_id and avatar_hash:
+        ext = "gif" if avatar_hash.startswith("a_") else "png"
+        return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=128"
+    # Default-Avatar: für neue Usernamen (user_id >> 22) % 6; sonst Index 0.
+    try:
+        idx = (int(user_id) >> 22) % 6
+    except (TypeError, ValueError):
+        idx = 0
+    return f"https://cdn.discordapp.com/embed/avatars/{idx}.png"
 
 app = FastAPI(title="RuckZUG Cards API", version="0.8.0")
 
@@ -83,15 +94,16 @@ def require_admin(request: Request) -> str:
     return uid
 
 
-def _record_login(user_id: str, username: str | None) -> None:
-    """Login in app_users festhalten (für die Admin-User-Liste)."""
+def _record_login(user_id: str, username: str | None, avatar: str | None = None) -> None:
+    """Login in app_users festhalten (für die Admin-User-Liste + Avatar)."""
     with db.connection() as conn:
         conn.execute(
-            "INSERT INTO app_users (user_id, username, first_login, last_login) "
-            "VALUES (?, ?, datetime('now'), datetime('now')) "
+            "INSERT INTO app_users (user_id, username, avatar, first_login, last_login) "
+            "VALUES (?, ?, ?, datetime('now'), datetime('now')) "
             "ON CONFLICT(user_id) DO UPDATE SET "
-            "username = excluded.username, last_login = datetime('now')",
-            (user_id, username),
+            "username = excluded.username, avatar = excluded.avatar, "
+            "last_login = datetime('now')",
+            (user_id, username, avatar),
         )
 
 
@@ -129,7 +141,7 @@ async def auth_callback(request: Request, code: str | None = None, state: str | 
     uname = user.get("global_name") or user.get("username") or "Discord-User"
     request.session["user_id"] = uid
     request.session["username"] = uname
-    _record_login(uid, uname)
+    _record_login(uid, uname, user.get("avatar"))
     return RedirectResponse(FRONTEND_URL)
 
 
@@ -141,13 +153,27 @@ def auth_logout(request: Request) -> dict:
 
 @app.get("/api/me")
 def me(request: Request) -> dict:
-    """Aktueller Login-Status (vom Frontend abgefragt)."""
+    """Aktueller Login-Status inkl. Avatar + Sanduhr-Stand (vom Frontend abgefragt)."""
     uid = request.session.get("user_id")
+    avatar = None
+    hourglasses = 0
+    if uid:
+        with db.connection() as conn:
+            au = conn.execute(
+                "SELECT avatar FROM app_users WHERE user_id = ?", (uid,)
+            ).fetchone()
+            avatar = au["avatar"] if au else None
+            hg = conn.execute(
+                "SELECT count FROM hourglasses WHERE user_id = ?", (uid,)
+            ).fetchone()
+            hourglasses = hg["count"] if hg else 0
     return {
         "logged_in": bool(uid),
         "user_id": uid,
         "username": request.session.get("username"),
         "is_admin": is_admin(uid),
+        "avatar_url": avatar_url(uid, avatar) if uid else None,
+        "hourglasses": hourglasses,
     }
 
 
@@ -201,6 +227,7 @@ def admin_users(request: Request) -> dict:
             )
             SELECT i.user_id AS user_id,
                    au.username AS username,
+                   au.avatar AS avatar,
                    au.last_login AS last_login,
                    COALESCE(h.count, 0) AS hourglasses,
                    COALESCE((SELECT COUNT(*) FROM user_cards uc
@@ -211,7 +238,24 @@ def admin_users(request: Request) -> dict:
             ORDER BY au.last_login DESC NULLS LAST, i.user_id
             """
         ).fetchall()
-    return {"users": [dict(r) for r in rows]}
+    users = []
+    for r in rows:
+        u = dict(r)
+        u["avatar_url"] = avatar_url(u["user_id"], u.pop("avatar"))
+        users.append(u)
+    return {"users": users}
+
+
+@app.get("/api/admin/user-cards")
+def admin_user_cards(request: Request, user_id: str) -> dict:
+    """Besitz-Anzahl je Karte für EINEN User (für die Karten-Verwaltung)."""
+    require_admin(request)
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT card_id, count FROM user_cards WHERE user_id = ? AND count > 0",
+            (user_id,),
+        ).fetchall()
+    return {"user_id": user_id, "cards": {r["card_id"]: r["count"] for r in rows}}
 
 
 class AdminHourglassesRequest(BaseModel):
@@ -288,17 +332,3 @@ def admin_cards_take(req: AdminCardRequest, request: Request) -> dict:
             (req.user_id, req.card_id, new_count),
         )
     return {"user_id": req.user_id, "card_id": req.card_id, "count": new_count}
-
-
-# =====================================================================
-# DEV-ONLY (nur aktiv, wenn DEV_ENDPOINTS gesetzt ist)
-# =====================================================================
-@app.post("/api/dev/login")
-def dev_login(request: Request, user_id: str = "test_user_1") -> dict:
-    """DEV-ONLY: loggt ohne Discord als Test-User ein (lokales Testen)."""
-    if not DEV_ENDPOINTS:
-        raise HTTPException(404, "Nicht verfügbar.")
-    request.session["user_id"] = user_id
-    request.session["username"] = f"DEV {user_id}"
-    _record_login(user_id, f"DEV {user_id}")
-    return {"logged_in": True, "user_id": user_id, "username": f"DEV {user_id}"}

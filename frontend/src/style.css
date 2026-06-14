@@ -347,11 +347,51 @@ canvas {
 .user-label {
   font-size: 14px;
   color: #cbd5e1;
-  max-width: 40vw;
+  max-width: 32vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Avatar (Discord) in der Topbar. */
+.avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1e293b;
+  border: 1px solid #334155;
+}
+.avatar-img[hidden] { display: none; }
+/* Sanduhr-Stand in der Topbar. */
+.hg-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fcd34d;
+  background: rgba(180, 130, 10, 0.18);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.hg-label[hidden] { display: none; }
+
+/* Pack gesperrt (0 Sanduhren): ausgegraut + Hinweis, nicht anklickbar. */
+.pack-tile.locked {
+  cursor: not-allowed;
+  filter: grayscale(0.85) brightness(0.55);
+  opacity: 0.75;
+}
+.pack-tile.locked:hover {
+  transform: none;
+  border-color: #334155;
+  box-shadow: none;
+}
+.pack-lock {
+  font-size: var(--progress-size);
+  font-weight: 600;
+  color: #fca5a5;
+}
+.pack-lock[hidden] { display: none; }
 .menu-sep {
   border: none;
   border-top: 1px solid #334155;
@@ -457,9 +497,18 @@ canvas {
 }
 .admin-user-head {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+}
+.admin-user-idbox { display: flex; flex-direction: column; min-width: 0; }
+.admin-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: #1e293b;
+  border: 1px solid #334155;
 }
 .admin-user-name { font-weight: 700; font-size: 15px; }
 .admin-user-id {
@@ -520,3 +569,85 @@ canvas {
 .admin-btn-warn:hover { border-color: #b91c1c; background: rgba(127, 29, 29, 0.25); }
 
 .admin-feedback { font-size: 13px; min-height: 1.1em; }
+
+/* --- Einstellungen: Tuning-Toggle --- */
+.admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.admin-toggle input { width: 18px; height: 18px; cursor: pointer; }
+.admin-hint-sm { font-size: 12px; color: #64748b; line-height: 1.5; }
+
+.admin-btn-primary { border-color: #2563eb; color: #bfdbfe; }
+.admin-btn-primary:hover { border-color: #3b82f6; background: rgba(37, 99, 235, 0.18); }
+
+/* --- Karten-Verwaltung --- */
+.admin-sel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.admin-filter { max-width: none; width: 100%; }
+
+.admin-cardlist { display: flex; flex-direction: column; gap: 14px; }
+.admin-cardgroup { display: flex; flex-direction: column; gap: 6px; }
+.admin-cardgroup[hidden] { display: none; }
+.admin-cardgroup-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 2px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.admin-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+}
+.admin-card[hidden] { display: none; }
+.admin-card-img {
+  width: 40px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: #0b1220;
+  border: 1px solid #334155;
+  flex: 0 0 auto;
+}
+.admin-card-img.is-missing { background: repeating-linear-gradient(45deg, #0b1220, #0b1220 6px, #14203a 6px, #14203a 12px); }
+.admin-card-info { flex: 1 1 130px; min-width: 0; }
+.admin-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-card-sub { font-size: 11px; color: #64748b; }
+.admin-card-have {
+  font-size: 13px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  min-width: 56px;
+  text-align: right;
+}
+.admin-card-fb { flex-basis: 100%; font-size: 12px; min-height: 1em; }
+
+@media (max-width: 480px) {
+  .admin-card-info { flex-basis: 100%; order: 1; }
+  .admin-card-img { order: 0; }
+  .admin-card-have { order: 0; }
+}

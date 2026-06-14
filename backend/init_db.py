@@ -21,6 +21,18 @@ import db  # gemeinsamer Zugriffs-Layer (setzt WAL + busy_timeout + foreign_keys
 _SCHEMA_FILE = Path(__file__).resolve().parent / "schema.sql"
 
 
+def _migrate(conn) -> None:
+    """Additive, idempotente Migrationen für bereits bestehende cards.db.
+
+    ``CREATE TABLE IF NOT EXISTS`` legt fehlende Tabellen an, ergänzt aber KEINE
+    neuen Spalten in bereits existierenden Tabellen — das holen wir hier nach.
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(app_users);").fetchall()}
+    if cols and "avatar" not in cols:
+        conn.execute("ALTER TABLE app_users ADD COLUMN avatar TEXT;")
+        print("Migration: app_users.avatar ergänzt.")
+
+
 def init_db() -> None:
     schema_sql = _SCHEMA_FILE.read_text(encoding="utf-8")
 
@@ -28,6 +40,7 @@ def init_db() -> None:
         # WAL wird bereits in db.connect() per PRAGMA gesetzt; hier nur bestätigen.
         mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
         conn.executescript(schema_sql)
+        _migrate(conn)
 
     print(f"cards.db initialisiert unter: {db.get_db_path()}")
     print(f"journal_mode = {mode}")

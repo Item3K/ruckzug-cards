@@ -125,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_questprogress_quest ON quest_progress (quest_id);
 CREATE TABLE IF NOT EXISTS app_users (
     user_id      TEXT PRIMARY KEY,
     username     TEXT,
+    avatar       TEXT,                            -- Discord-Avatar-Hash (für die Avatar-URL)
     first_login  TEXT NOT NULL DEFAULT (datetime('now')),
     last_login   TEXT NOT NULL DEFAULT (datetime('now'))
 );

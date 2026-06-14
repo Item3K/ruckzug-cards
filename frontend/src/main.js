@@ -12,7 +12,7 @@ import { RevealSequence } from './revealSequence.js';
 import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
-import { Admin } from './adminView.js';
+import { Admin, TUNING_LS_KEY } from './adminView.js';
 import { applyLandingVars } from './landingConfig.js';
 import { DOUBLE_TAP_MS, TAP_VS_DRAG_THRESHOLD } from './config.js';
 
@@ -38,10 +38,13 @@ onFrame((delta) => {
 
 let currentPack = null;
 let loggedIn = false;     // Login-Status (von der Landing via onAuthChange)
+let isAdmin = false;      // Admin-Status (von der Landing via onAuthChange)
+let activeView = 'landing';
 let landing = null;
 let admin = null;
 let openingPanel = null;
 let landingPanel = null;
+let panelsLoading = false;
 
 // Opening-UI ohne Pack-Auswähler (das Pack wird auf der Landing-Page gewählt);
 // "Zurück zur Auswahl" führt zurück zur Landing-Page.
@@ -98,8 +101,35 @@ async function loadPack(pack) {
 }
 
 function showPanels(view) {
+  activeView = view;
   if (openingPanel) openingPanel.domElement.style.display = view === 'opening' ? '' : 'none';
   if (landingPanel) landingPanel.domElement.style.display = view === 'landing' ? '' : 'none';
+}
+
+// Tuning-Panels (3D aus 4c + Landing-Layout aus Phase 6): nur für eingeloggte
+// Admins UND nur wenn im Admin-Tab eingeschaltet (persistent in localStorage).
+// Nicht-Admins bekommen sie nie zu sehen.
+function tuningEnabled() {
+  return localStorage.getItem(TUNING_LS_KEY) === '1';
+}
+
+async function applyTuningPanels(enabled) {
+  const shouldShow = isAdmin && enabled;
+  if (shouldShow) {
+    if (openingPanel || landingPanel || panelsLoading) return;
+    panelsLoading = true;
+    try {
+      const [tp, lp] = await Promise.all([import('./tuningPanel.js'), import('./landingPanel.js')]);
+      openingPanel = tp.createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
+      landingPanel = lp.createLandingPanel();
+    } finally {
+      panelsLoading = false;
+    }
+    showPanels(activeView); // nur das zur aktuellen View passende Panel zeigen
+  } else {
+    if (openingPanel) { openingPanel.destroy(); openingPanel = null; }
+    if (landingPanel) { landingPanel.destroy(); landingPanel = null; }
+  }
 }
 
 function enterOpening(pack) {
@@ -117,7 +147,8 @@ function enterLanding() {
   opening.setActive(false);
   ui.setVisible(false);
   landing.setActive(true);
-  landing.refresh(); // Fortschritt nach dem Opening aktualisieren
+  // refreshAuth aktualisiert Sanduhr-Stand + Pack-Gate (nach dem Opening), refresh den Fortschritt.
+  landing.refreshAuth().then(() => landing.refresh());
   showPanels('landing');
 }
 
@@ -131,6 +162,7 @@ function enterAdmin(push = true) {
   opening.setActive(false);
   ui.setVisible(false);
   landing.setActive(false);
+  showPanels('admin'); // Tuning-Panels im Admin-Tab ausblenden
   admin.open();
 }
 
@@ -156,12 +188,20 @@ async function init() {
   opening.setActive(false);
   ui.setVisible(false);
 
-  // Admin-View (versteckt, bis geöffnet).
-  admin = new Admin({ onClose: () => exitAdmin() });
+  // Admin-View (versteckt, bis geöffnet). Der Tuning-Toggle schaltet die Panels live.
+  admin = new Admin({
+    onClose: () => exitAdmin(),
+    onTuningToggle: (enabled) => applyTuningPanels(enabled),
+  });
 
   // Landing aufbauen + anzeigen (Default-View).
   landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
-  landing.onAuthChange = (me) => { loggedIn = !!me.logged_in; }; // vor build(), damit der erste refreshAuth greift
+  // vor build(), damit der erste refreshAuth greift: Login-/Admin-Status + Panels.
+  landing.onAuthChange = (me) => {
+    loggedIn = !!me.logged_in;
+    isAdmin = !!me.is_admin;
+    applyTuningPanels(tuningEnabled()); // erstellt/zerstört Panels je nach Admin+Schalter
+  };
   landing.onOpenAdmin = () => enterAdmin();
   await landing.build();
   landing.setActive(true);
@@ -170,14 +210,7 @@ async function init() {
   if (window.location.pathname === '/admin') enterAdmin(false);
 }
 
-// DEV-ONLY: beide Tuning-Panels (3D + Landing-Layout). Im Live-Build per
-// Dead-Code-Elimination raus. Es wird jeweils nur das zur aktiven View gezeigt.
-init().then(() => {
-  if (import.meta.env.DEV) {
-    Promise.all([import('./tuningPanel.js'), import('./landingPanel.js')]).then(([tp, lp]) => {
-      openingPanel = tp.createTuningPanel({ camera, cardStack, reloadPack: () => loadPack(currentPack) });
-      landingPanel = lp.createLandingPanel();
-      showPanels('landing'); // Start ist Landing
-    });
-  }
-});
+// Tuning-Panels werden NICHT mehr beim Start erzeugt, sondern admin-gated über
+// applyTuningPanels() (siehe landing.onAuthChange + Admin-Toggle). So sind sie im
+// Live-Build vorhanden, aber nur für eingeloggte Admins mit aktiviertem Schalter.
+init();

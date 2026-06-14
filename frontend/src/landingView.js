@@ -46,6 +46,15 @@ export class Landing {
     bar.appendChild(el('div', 'brand', 'RuckZUG Cards'));
 
     const right = el('div', 'topbar-right');
+    // Sanduhr-Stand (nur eingeloggt sichtbar).
+    this._hgLabel = el('span', 'hg-label', '');
+    this._hgLabel.hidden = true;
+    right.appendChild(this._hgLabel);
+    // Avatar (nur eingeloggt sichtbar) + Username.
+    this._avatarImg = el('img', 'avatar-img');
+    this._avatarImg.alt = '';
+    this._avatarImg.hidden = true;
+    right.appendChild(this._avatarImg);
     this._userLabel = el('span', 'user-label', ''); // Username, wenn eingeloggt
     right.appendChild(this._userLabel);
 
@@ -94,11 +103,17 @@ export class Landing {
     if (this.me.logged_in) {
       this._userLabel.textContent = this.me.username || 'Angemeldet';
       this._authBtn.textContent = 'Abmelden';
+      if (this.me.avatar_url) { this._avatarImg.src = this.me.avatar_url; this._avatarImg.hidden = false; }
+      this._hgLabel.textContent = `⌛ ${this.me.hourglasses ?? 0}`;
+      this._hgLabel.hidden = false;
     } else {
       this._userLabel.textContent = '';
       this._authBtn.textContent = 'Mit Discord anmelden';
+      this._avatarImg.hidden = true;
+      this._hgLabel.hidden = true;
     }
     this._adminBtn.hidden = !this.me.is_admin; // Admin-Menüpunkt nur für Admins
+    this._applyPackGate();                     // Packs bei 0 Sanduhren sperren
     if (this.onAuthChange) this.onAuthChange(this.me);
     return this.me;
   }
@@ -152,14 +167,20 @@ export class Landing {
         footer.appendChild(el('div', 'pack-name', pack.label));
         const prog = el('div', 'pack-progress', '–');
         footer.appendChild(prog);
+        const lock = el('div', 'pack-lock', 'Keine Sanduhren');
+        lock.hidden = true;
+        footer.appendChild(lock);
         tile.appendChild(stage);
         tile.appendChild(footer);
-        tile.addEventListener('click', () => this.onPackClick({
-          id: pack.id, label: pack.label, file: pack.ripUrl, backendPackId: pack.backendPackId,
-        }));
+        tile.addEventListener('click', () => {
+          if (tile.classList.contains('locked')) return; // 0 Sanduhren -> nicht öffenbar
+          this.onPackClick({
+            id: pack.id, label: pack.label, file: pack.ripUrl, backendPackId: pack.backendPackId,
+          });
+        });
         row.appendChild(tile);
 
-        this._packEls.push({ setId: set.id, pack, progressEl: prog });
+        this._packEls.push({ setId: set.id, pack, progressEl: prog, tileEl: tile, lockEl: lock });
         // Idle-GLB asynchron anhängen (rendert, sobald geladen).
         this.idle.add(stage, pack.idleUrl).catch((e) => console.warn('idle-GLB:', e));
       }
@@ -226,6 +247,15 @@ export class Landing {
       const total = set.cards.length;
       const have = set.cards.filter((c) => owned.has(c.id)).length;
       progressEl.textContent = `Set: ${have}/${total} gesammelt`;
+    }
+  }
+
+  /** Packs sperren (ausgrauen), wenn eingeloggt und 0 Sanduhren. */
+  _applyPackGate() {
+    const locked = this.me.logged_in && (this.me.hourglasses ?? 0) <= 0;
+    for (const pe of this._packEls) {
+      pe.tileEl.classList.toggle('locked', locked);
+      pe.lockEl.hidden = !locked;
     }
   }
 
