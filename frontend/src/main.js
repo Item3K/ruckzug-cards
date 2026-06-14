@@ -36,6 +36,7 @@ onFrame((delta) => {
 });
 
 let currentPack = null;
+let loggedIn = false;     // Login-Status (von der Landing via onAuthChange)
 let landing = null;
 let openingPanel = null;
 let landingPanel = null;
@@ -100,6 +101,8 @@ function showPanels(view) {
 }
 
 function enterOpening(pack) {
+  // Login erforderlich, bevor man ein Pack öffnet (ROADMAP §8).
+  if (!loggedIn) { landing.promptLogin(); return; }
   landing.setActive(false);
   opening.setActive(true);
   ui.setVisible(true);
@@ -127,6 +130,7 @@ async function init() {
 
   // Landing aufbauen + anzeigen (Default-View).
   landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
+  landing.onAuthChange = (me) => { loggedIn = !!me.logged_in; }; // vor build(), damit der erste refreshAuth greift
   await landing.build();
   landing.setActive(true);
 }

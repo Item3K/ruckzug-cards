@@ -18,7 +18,6 @@ import {
   AUTO_RETURN_DELAY,
 } from './config.js';
 
-const USER_ID = 'test_user_1'; // Platzhalter bis OAuth (Phase 3b)
 
 export class RevealSequence {
   constructor({ viewer, beam, cardStack, rotator, tweens, ui, onAbort, onComplete }) {
@@ -68,7 +67,7 @@ export class RevealSequence {
     this._revealed = false;
 
     // Karten PARALLEL zur Animation holen (sofort beim Klick, vor jedem await).
-    this._cardsReady = openPack(backendPackId, USER_ID);
+    this._cardsReady = openPack(backendPackId);
     this._cardsReady.catch(() => {}); // unhandled rejection vermeiden (Fehler unten)
 
     // 2) Aufreißen SOFORT starten.
@@ -146,9 +145,11 @@ export class RevealSequence {
     // Fehlertext sichtbar im Status (der Hint ist im select-Modus ausgeblendet),
     // damit ein Fehler NIE wie "nichts passiert" aussieht.
     const msg =
-      e.status === 400
-        ? 'Keine Sanduhren — in /docs via /api/dev/give-hourglasses nachfüllen'
-        : `Fehler beim Öffnen: ${e.message}`;
+      e.status === 401
+        ? 'Bitte zuerst mit Discord anmelden (Menü oben rechts).'
+        : e.status === 400
+          ? 'Keine Sanduhren — in /docs via /api/dev/give-hourglasses nachfüllen'
+          : `Fehler beim Öffnen: ${e.message}`;
     // Pack frisch laden (es wurde schon angerissen, da Animation parallel lief) und
     // danach den Fehler anzeigen. onAbort kümmert sich um Reload + Status.
     if (this.onAbort) this.onAbort(msg);

@@ -1,28 +1,14 @@
-// Anbindung ans Backend (Phase 3a). Im Dev proxyt Vite '/api' an FastAPI
-// (siehe vite.config.js), daher reicht der relative Pfad.
+// Anbindung ans Backend. Im Dev proxyt Vite '/api' und '/auth' ans FastAPI
+// (same-origin -> die Session-Cookies fließen automatisch). Der eingeloggte User
+// kommt aus der Server-Session, daher KEINE user_id mehr vom Client.
 //
-// WICHTIG: Das Frontend würfelt NICHT selbst — es zeigt nur, was der Server
-// liefert (gezogene Karten + beam_stage). Cheat-Schutz laut ROADMAP §6.
+// WICHTIG: Das Frontend würfelt NICHT selbst — nur Anzeige des Server-Ergebnisses
+// (Cheat-Schutz, ROADMAP §6).
 
-/**
- * Öffnet ein Pack serverseitig.
- * @param {string} packId  Backend-pack_id (z.B. 'pack_wald')
- * @param {string} userId  Platzhalter bis OAuth (Phase 3b) — wie in 3a
- * @returns {Promise<{pack_id:string, drawn_cards:Array, beam_stage:string, hourglasses_remaining:number}>}
- */
-export async function openPack(packId, userId) {
-  const res = await fetch('/api/open-pack', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pack_id: packId, user_id: userId }),
-  });
+async function jsonOrThrow(res) {
   if (!res.ok) {
     let detail;
-    try {
-      detail = (await res.json()).detail;
-    } catch {
-      detail = res.statusText;
-    }
+    try { detail = (await res.json()).detail; } catch { detail = res.statusText; }
     const err = new Error(detail || `HTTP ${res.status}`);
     err.status = res.status;
     throw err;
@@ -30,28 +16,44 @@ export async function openPack(packId, userId) {
   return res.json();
 }
 
-/**
- * Liefert die besessenen card_ids eines Users für ein Set (für Fortschritt).
- * @returns {Promise<{set_id:string, owned:string[]}>}
- */
-export async function getCollection(userId, setId) {
-  const url = `/api/collection?user_id=${encodeURIComponent(userId)}&set_id=${encodeURIComponent(setId)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`collection HTTP ${res.status}`);
-  return res.json();
+// --- Auth ---
+/** Aktueller Login-Status: { logged_in, user_id, username }. */
+export async function getMe() {
+  return jsonOrThrow(await fetch('/api/me'));
+}
+/** Startet den Discord-Login (volle Navigation zum Backend-Login-Endpoint). */
+export function startLogin() {
+  window.location.href = '/auth/login';
+}
+export async function logout() {
+  return jsonOrThrow(await fetch('/auth/logout', { method: 'POST' }));
 }
 
-/**
- * DEV-ONLY: Sanduhren gutschreiben (damit der Test-Flow nicht an leeren
- * Sanduhren scheitert). Spiegelt /api/dev/give-hourglasses aus 3a.
- * TODO: vor Live entfernen/absichern (gehört zum Dev-Endpoint).
- */
+// --- Spiel ---
+/** Öffnet ein Pack (user_id kommt aus der Session). */
+export async function openPack(packId) {
+  return jsonOrThrow(await fetch('/api/open-pack', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pack_id: packId }),
+  }));
+}
+
+/** Besessene card_ids des eingeloggten Users für ein Set. */
+export async function getCollection(setId) {
+  return jsonOrThrow(await fetch(`/api/collection?set_id=${encodeURIComponent(setId)}`));
+}
+
+// --- DEV-ONLY ---
+/** DEV: ohne Discord als Test-User einloggen (lokales Testen). */
+export async function devLogin(userId = 'test_user_1') {
+  return jsonOrThrow(await fetch(`/api/dev/login?user_id=${encodeURIComponent(userId)}`, { method: 'POST' }));
+}
+/** DEV: Sanduhren gutschreiben. */
 export async function devGiveHourglasses(userId, amount) {
-  const res = await fetch('/api/dev/give-hourglasses', {
+  return jsonOrThrow(await fetch('/api/dev/give-hourglasses', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, amount }),
-  });
-  if (!res.ok) throw new Error(`give-hourglasses HTTP ${res.status}`);
-  return res.json();
+  }));
 }

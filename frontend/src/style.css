@@ -337,3 +337,45 @@ canvas {
 .placeholder[hidden] { display: none; }
 .placeholder h2 { font-size: 26px; margin: 0; }
 .placeholder p { color: #94a3b8; margin: 0; }
+
+/* --- Auth (Login-Status, Phase 8) --- */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.user-label {
+  font-size: 14px;
+  color: #cbd5e1;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-sep {
+  border: none;
+  border-top: 1px solid #334155;
+  margin: 4px 2px;
+}
+.auth-btn {
+  pointer-events: auto;
+  padding: 10px 16px;
+  min-height: 44px;
+  border: 1px solid #5865F2;          /* Discord-Blurple */
+  border-radius: 10px;
+  background: #5865F2;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.auth-btn:hover { filter: brightness(1.07); }
+/* Im Menü als schlichter Eintrag (kein Vollflächen-Button). */
+.menu .auth-btn {
+  background: transparent;
+  border: none;
+  color: #c7ccff;
+  text-align: left;
+  font-weight: 600;
+}
+.menu .auth-btn:hover { background: rgba(88, 101, 242, 0.15); filter: none; }

@@ -7,10 +7,8 @@
 // - Hamburger-Menü oben rechts mit Platzhaltern Dex/Freunde/Trading.
 
 import { loadAllSets } from './setLoader.js';
-import { getCollection } from './api.js';
+import { getCollection, getMe, startLogin, logout } from './api.js';
 import { IdlePacks } from './idlePacks.js';
-
-const USER_ID = 'test_user_1'; // Platzhalter bis OAuth (Phase 8)
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -24,6 +22,8 @@ export class Landing {
   constructor({ onPackClick }) {
     this.onPackClick = onPackClick;
     this.idle = new IdlePacks();
+    this.me = { logged_in: false };
+    this.onAuthChange = null; // (me) => void, gesetzt von main (für die Opening-Gate)
     this.sets = [];
     this._packEls = []; // { setId, pack, progressEl }
     this._setEls = [];  // { set, progressEl }
@@ -43,39 +43,82 @@ export class Landing {
   _buildTopbar() {
     const bar = el('header', 'topbar');
     bar.appendChild(el('div', 'brand', 'RuckZUG Cards'));
+
+    const right = el('div', 'topbar-right');
+    this._userLabel = el('span', 'user-label', ''); // Username, wenn eingeloggt
+    right.appendChild(this._userLabel);
+
     const burger = el('button', 'hamburger', '≡');
     burger.setAttribute('aria-label', 'Menü');
     const menu = el('nav', 'menu');
     menu.hidden = true;
-    const items = [
-      ['dex', 'Dex'], ['friends', 'Freunde'], ['trading', 'Trading'],
-    ];
-    for (const [key, label] of items) {
+
+    // Auth-Eintrag (Anmelden/Abmelden) — Text/Aktion abhängig vom Login-Status.
+    this._authBtn = el('button', 'auth-btn', 'Mit Discord anmelden');
+    this._authBtn.addEventListener('click', () => {
+      menu.hidden = true;
+      if (this.me.logged_in) logout().then(() => this.refreshAuth()).then(() => this.refresh());
+      else startLogin();
+    });
+    menu.appendChild(this._authBtn);
+    menu.appendChild(el('hr', 'menu-sep'));
+
+    for (const label of ['Dex', 'Freunde', 'Trading']) {
       const b = el('button', null, label);
       b.addEventListener('click', () => { menu.hidden = true; this._openPlaceholder(label); });
       menu.appendChild(b);
     }
     burger.addEventListener('click', () => { menu.hidden = !menu.hidden; });
-    bar.appendChild(burger);
+
+    right.appendChild(burger);
+    bar.appendChild(right);
     bar.appendChild(menu);
     return bar;
+  }
+
+  /** Login-Status holen und Topbar/Menü aktualisieren. */
+  async refreshAuth() {
+    try { this.me = await getMe(); } catch { this.me = { logged_in: false }; }
+    if (this.me.logged_in) {
+      this._userLabel.textContent = this.me.username || 'Angemeldet';
+      this._authBtn.textContent = 'Abmelden';
+    } else {
+      this._userLabel.textContent = '';
+      this._authBtn.textContent = 'Mit Discord anmelden';
+    }
+    if (this.onAuthChange) this.onAuthChange(this.me);
+    return this.me;
   }
 
   _buildPlaceholder() {
     const ov = el('div', 'placeholder');
     ov.hidden = true;
     this._phTitle = el('h2', null, '');
-    const sub = el('p', null, 'kommt bald.');
+    this._phText = el('p', null, '');
+    this._phLogin = el('button', 'auth-btn', 'Mit Discord anmelden');
+    this._phLogin.hidden = true;
+    this._phLogin.addEventListener('click', () => startLogin());
     const back = el('button', 'back-btn', 'Zurück');
     back.addEventListener('click', () => { ov.hidden = true; });
     ov.appendChild(this._phTitle);
-    ov.appendChild(sub);
+    ov.appendChild(this._phText);
+    ov.appendChild(this._phLogin);
     ov.appendChild(back);
     return ov;
   }
 
   _openPlaceholder(title) {
     this._phTitle.textContent = title;
+    this._phText.textContent = 'kommt bald.';
+    this._phLogin.hidden = true;
+    this.placeholder.hidden = false;
+  }
+
+  /** Login-Aufforderung (z.B. wenn nicht eingeloggt ein Pack geöffnet werden soll). */
+  promptLogin() {
+    this._phTitle.textContent = 'Anmelden erforderlich';
+    this._phText.textContent = 'Zum Öffnen von Packs bitte mit Discord anmelden.';
+    this._phLogin.hidden = false;
     this.placeholder.hidden = false;
   }
 
@@ -127,6 +170,7 @@ export class Landing {
     window.addEventListener('landing-relayout', () => this._scheduleLayout());
     this._scheduleLayout();
 
+    await this.refreshAuth(); // Login-Status (bestimmt, ob Fortschritt vorhanden ist)
     await this.refresh();
   }
 
@@ -152,10 +196,12 @@ export class Landing {
   async refresh() {
     for (const { set, progressEl } of this._setEls) {
       let owned = new Set();
-      try {
-        owned = new Set((await getCollection(USER_ID, set.id)).owned);
-      } catch (e) {
-        console.warn('collection:', e);
+      if (this.me.logged_in) {
+        try {
+          owned = new Set((await getCollection(set.id)).owned);
+        } catch (e) {
+          console.warn('collection:', e);
+        }
       }
       // Pro Pack: pack-exklusive Karten.
       for (const pe of this._packEls.filter((p) => p.setId === set.id)) {

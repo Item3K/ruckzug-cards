@@ -7,10 +7,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
+      // /api und /auth ans FastAPI-Backend (same-origin -> Session-Cookies fliessen).
+      // Ziel 127.0.0.1 (IPv4) statt localhost: unter Windows löst localhost für Node
+      // oft auf ::1 auf, uvicorn lauscht aber auf 127.0.0.1 -> sonst Proxy-Fehler.
+      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/auth': { target: 'http://127.0.0.1:8000', changeOrigin: true },
     },
   },
 });
