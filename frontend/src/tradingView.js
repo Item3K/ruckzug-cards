@@ -26,10 +26,14 @@ function el(tag, cls, text) {
 }
 
 export class Trading {
-  /** @param {{ onClose: ()=>void, onIncomingCount?: (n:number)=>void }} opts */
-  constructor({ onClose, onIncomingCount } = {}) {
+  /**
+   * @param {{ onClose: ()=>void, onIncomingCount?: (n:number)=>void,
+   *           onNotificationClick?: ()=>void }} opts
+   */
+  constructor({ onClose, onIncomingCount, onNotificationClick } = {}) {
     this.onClose = onClose || (() => {});
     this._onIncoming = onIncomingCount || null;
+    this._onNotifClick = onNotificationClick || null;
     this.sets = null;
     this.cardMap = {};      // card_id -> { id, name, rarity, finish, assetUrl }
     this.me = null;
@@ -41,6 +45,10 @@ export class Trading {
     this._visHandler = null;
     this._lastSig = null;   // Signatur der zuletzt gerenderten Trade-Liste
     this._newPanel = null;  // Referenz aufs „Neuer Trade"-Panel (Busy-Erkennung)
+
+    // Notification-State
+    this._known = null;     // Map(trade_id -> { status, incoming }) für Event-Dedup
+    this._notifyAsked = false;
 
     this.root = el('div', 'trading-view');
     this.root.hidden = true;
@@ -96,6 +104,7 @@ export class Trading {
       this.myCollection = mine.cards || {};
       await this._hardRefresh();
       this._startPolling();
+      this._maybeRequestPermission(); // höflich beim ersten Öffnen (User-Geste), einmalig
     } catch (e) {
       this.body.innerHTML = '';
       this.body.appendChild(el('p', 'trade-msg trade-err', `Fehler: ${e.message || e}`));
@@ -117,6 +126,7 @@ export class Trading {
     this._render(data);
     this._lastSig = this._signature(data);
     if (this._onIncoming) this._onIncoming(data.incoming.length);
+    this._recordKnown(data); // Baseline still setzen (eigene Aktionen lösen keine Notification aus)
   }
 
   /** Baut die Ansicht aus bereits geladenen Daten auf (kein Netz-Zugriff). */
@@ -148,10 +158,14 @@ export class Trading {
    * keine unnötigen „Sprünge". Den Badge-Zähler aktualisieren wir aber immer.
    */
   async _poll() {
-    if (this.root.hidden || document.hidden) return;
+    if (this.root.hidden) return;
     let data;
     try { data = await listTrades(); } catch { return; } // transiente Fehler ignorieren
     if (this._onIncoming) this._onIncoming(data.incoming.length);
+    // Notifications IMMER prüfen (auch bei Busy/keinem Re-Render): erst erkennen,
+    // dann bekannte Zustände fortschreiben -> jedes Ereignis löst genau einmal aus.
+    this._detectAndNotify(data);
+    this._recordKnown(data);
     if (this._isBusy()) return;
     if (this._signature(data) === this._lastSig) return;
     try {
@@ -180,14 +194,16 @@ export class Trading {
 
   _startPolling() {
     this._stopPolling();
-    // Im Hintergrund-Tab pausieren (Ressourcen schonen), bei Rückkehr weiterlaufen.
-    this._visHandler = () => { if (document.hidden) this._clearTimer(); else this._ensureTimer(); };
+    // Läuft weiter, auch wenn der Browser-Tab im Hintergrund ist — sonst kämen die
+    // Notifications nie an, wenn man woanders ist. Gestoppt wird erst beim Verlassen
+    // der Trading-Ansicht (hide()). Bei Rückkehr in den Vordergrund sofort aktualisieren.
+    this._visHandler = () => { if (!document.hidden) this._poll(); };
     document.addEventListener('visibilitychange', this._visHandler);
     this._ensureTimer();
   }
 
   _ensureTimer() {
-    if (this._pollTimer || document.hidden || this.root.hidden) return;
+    if (this._pollTimer || this.root.hidden) return;
     this._pollTimer = setInterval(() => this._poll(), POLL_INTERVAL_MS);
   }
 
@@ -201,6 +217,69 @@ export class Trading {
       document.removeEventListener('visibilitychange', this._visHandler);
       this._visHandler = null;
     }
+  }
+
+  // --- Browser-Notifications ------------------------------------------------
+  /** Einmalig (und nur im 'default'-Zustand) höflich nach Erlaubnis fragen. */
+  _maybeRequestPermission() {
+    if (!('Notification' in window) || this._notifyAsked) return;
+    if (Notification.permission === 'default') {
+      this._notifyAsked = true;
+      try { Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
+    }
+  }
+
+  /** Bekannte Zustände aller Trades festhalten (Basis fürs Einmal-Auslösen). */
+  _recordKnown(data) {
+    const m = new Map();
+    for (const t of data.incoming) m.set(t.id, { status: t.status, incoming: true });
+    for (const t of data.outgoing) m.set(t.id, { status: t.status, incoming: false });
+    for (const t of data.closed) m.set(t.id, { status: t.status, incoming: false });
+    this._known = m;
+  }
+
+  /**
+   * Vergleicht den neuen Stand mit den zuletzt bekannten Zuständen und löst je
+   * Ereignis GENAU EINMAL eine Notification aus: neue eingehende Anfrage (bzw.
+   * Gegenvorschlag, der den Zug zu mir dreht) sowie Statuswechsel offen->accepted/
+   * rejected bei einem meiner Trades. Eigene Aktionen aktualisieren die Baseline
+   * über _hardRefresh und lösen daher nichts aus.
+   */
+  _detectAndNotify(data) {
+    if (this._known === null) return; // erster Durchlauf: nur Baseline, kein Spam
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    for (const t of data.incoming) {
+      const prev = this._known.get(t.id);
+      if (!prev || !prev.incoming) {
+        this._notify('Neue Trade-Anfrage', `${this._otherName(t)} ist am Zug — du bist dran`, `trade-${t.id}-in`);
+      }
+    }
+    for (const t of data.closed) {
+      const prev = this._known.get(t.id);
+      if (prev && prev.status === 'open') {
+        if (t.status === 'accepted') {
+          this._notify('Trade angenommen', `${this._otherName(t)} hat deinen Trade angenommen`, `trade-${t.id}-acc`);
+        } else if (t.status === 'rejected') {
+          this._notify('Trade abgelehnt', `${this._otherName(t)} hat deinen Trade abgelehnt`, `trade-${t.id}-rej`);
+        }
+      }
+    }
+  }
+
+  _otherName(t) {
+    const me = this.me.user_id;
+    return t.from_user === me ? (t.to_username || t.to_user) : (t.from_username || t.from_user);
+  }
+
+  _notify(title, body, tag) {
+    try {
+      const n = new Notification(title, { body, tag });
+      n.onclick = () => {
+        window.focus();
+        if (this._onNotifClick) this._onNotifClick();
+        n.close();
+      };
+    } catch { /* ignore */ }
   }
 
   _section(title, trades, kind) {

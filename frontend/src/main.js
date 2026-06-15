@@ -223,6 +223,9 @@ async function init() {
   trading = new Trading({
     onClose: () => exitTrading(),
     onIncomingCount: (n) => { if (landing) landing.setTradeBadge(n); },
+    // Klick auf eine Notification: Fenster fokussieren (in der View-Methode) + zum
+    // Trading-Tab springen, falls man gerade woanders ist.
+    onNotificationClick: () => { if (activeView !== 'trading') enterTrading(); },
   });
 
   // Landing aufbauen + anzeigen (Default-View).
