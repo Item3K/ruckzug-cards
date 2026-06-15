@@ -100,3 +100,44 @@ Pro User und Quest **eine** Zeile; verweist auf die Vorlage in `quest_defs`.
 | `reward_claimed` | INTEGER 0/1 | Belohnung abgeholt |
 | `updated_at` | TEXT | letzte Änderung |
 | | | **PK = (`user_id`, `quest_id`)** |
+
+### `app_users` — wer hat sich je auf der Website eingeloggt (Phase 8/13a)
+Wird bei jedem Login (Discord-OAuth) per UPSERT aktualisiert. Basis für Admin-User-
+und Handelspartner-Listen sowie Avatar-Anzeige. (Nicht zu verwechseln mit der alten
+`database.db.users` des Bots.)
+| Spalte | Typ | Bedeutung |
+|---|---|---|
+| `user_id` | TEXT PK | Discord-ID |
+| `username` | TEXT | zuletzt gesehener Anzeigename |
+| `avatar` | TEXT | Discord-Avatar-Hash (→ CDN-URL, Fallback Default-Avatar) |
+| `first_login` | TEXT | erster Login |
+| `last_login` | TEXT | letzter Login |
+
+### `trades` — 1:1-Kartentausch zwischen zwei Usern (Phase 9b)
+A (`from_user`) bietet `offered_card`, B (`to_user`) gibt `requested_card`. Die Rollen
+A/B sind über den ganzen Trade **fest**; Gegenvorschläge ändern nur die beiden Karten
+und `turn_user`. Ausführung atomar in [`backend/trade_logic.py`](backend/trade_logic.py)
+(auch vom Discord-Bot wiederverwendbar).
+| Spalte | Typ | Bedeutung |
+|---|---|---|
+| `id` | INTEGER PK AI | Trade-ID |
+| `from_user` | TEXT | A — Ersteller |
+| `to_user` | TEXT | B — Empfänger |
+| `offered_card` | TEXT FK→`card_defs` | Karte, die A gibt |
+| `requested_card` | TEXT FK→`card_defs` | Karte, die B gibt |
+| `status` | TEXT | `open` / `accepted` / `rejected` / `cancelled` |
+| `turn_user` | TEXT | wer ist am Zug (NULL = beendet) |
+| `created_at` | TEXT | Erstellzeit |
+| `updated_at` | TEXT | letzte Änderung |
+
+### `trade_history` — Verlauf eines Trades (Verhandlung)
+Ein Eintrag je Aktion (Erstellung, jeder Gegenvorschlag, Abschluss) für die Anzeige.
+| Spalte | Typ | Bedeutung |
+|---|---|---|
+| `id` | INTEGER PK AI | |
+| `trade_id` | INTEGER FK→`trades` | zugehöriger Trade |
+| `actor` | TEXT | wer die Aktion ausgelöst hat |
+| `action` | TEXT | `create` / `counter` / `accept` / `reject` / `cancel` |
+| `offered_card` | TEXT | Karten-Stand nach der Aktion (A-Seite) |
+| `requested_card` | TEXT | Karten-Stand nach der Aktion (B-Seite) |
+| `created_at` | TEXT | Zeit der Aktion |

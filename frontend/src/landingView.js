@@ -23,8 +23,9 @@ export class Landing {
     this.onPackClick = onPackClick;
     this.idle = new IdlePacks();
     this.me = { logged_in: false };
-    this.onAuthChange = null; // (me) => void, gesetzt von main (für die Opening-Gate)
-    this.onOpenAdmin = null;  // () => void, gesetzt von main (Admin-Menüpunkt)
+    this.onAuthChange = null;   // (me) => void, gesetzt von main (für die Opening-Gate)
+    this.onOpenAdmin = null;    // () => void, gesetzt von main (Admin-Menüpunkt)
+    this.onOpenTrading = null;  // () => void, gesetzt von main (Trading-Menüpunkt)
     this.sets = [];
     this._packEls = []; // { setId, pack, progressEl }
     this._setEls = [];  // { set, progressEl }
@@ -75,7 +76,15 @@ export class Landing {
 
     for (const label of ['Dex', 'Freunde', 'Trading']) {
       const b = el('button', null, label);
-      b.addEventListener('click', () => { menu.hidden = true; this._openPlaceholder(label); });
+      b.addEventListener('click', () => {
+        menu.hidden = true;
+        if (label === 'Trading') {
+          if (this.me.logged_in) { if (this.onOpenTrading) this.onOpenTrading(); }
+          else this.promptLogin();
+        } else {
+          this._openPlaceholder(label);
+        }
+      });
       menu.appendChild(b);
     }
 

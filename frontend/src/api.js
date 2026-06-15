@@ -44,6 +44,35 @@ export async function getCollection(setId) {
   return jsonOrThrow(await fetch(`/api/collection?set_id=${encodeURIComponent(setId)}`));
 }
 
+// --- User-Verzeichnis & Trading (Phase 9b) ---
+/** Alle OAuth-User außer mir: { users:[{user_id, username, avatar_url}] }. */
+export async function listUsers() {
+  return jsonOrThrow(await fetch('/api/users'));
+}
+/** Besitz je Karte eines Users: { cards: { card_id: count } }. */
+export async function getUserCollection(userId) {
+  return jsonOrThrow(await fetch(`/api/users/${encodeURIComponent(userId)}/collection`));
+}
+/** Meine Trades, kategorisiert: { incoming, outgoing, closed }. */
+export async function listTrades() {
+  return jsonOrThrow(await fetch('/api/trades'));
+}
+/** Trade-Detail inkl. Verlauf. */
+export async function getTrade(id) {
+  return jsonOrThrow(await fetch(`/api/trades/${id}`));
+}
+/** Neuen Trade vorschlagen (A bietet offeredCard, fragt requestedCard von toUser). */
+export async function createTrade(toUser, offeredCard, requestedCard) {
+  return postJson('/api/trades', { to_user: toUser, offered_card: offeredCard, requested_card: requestedCard });
+}
+/** Gegenvorschlag (Paar neu zusammenstellen). */
+export async function counterTrade(id, offeredCard, requestedCard) {
+  return postJson(`/api/trades/${id}/counter`, { offered_card: offeredCard, requested_card: requestedCard });
+}
+export async function acceptTrade(id) { return postJson(`/api/trades/${id}/accept`, {}); }
+export async function rejectTrade(id) { return postJson(`/api/trades/${id}/reject`, {}); }
+export async function cancelTrade(id) { return postJson(`/api/trades/${id}/cancel`, {}); }
+
 // --- Admin (Phase 13a, nur für Admins — serverseitig erzwungen) ---
 function postJson(url, body) {
   return fetch(url, {

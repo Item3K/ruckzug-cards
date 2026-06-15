@@ -29,6 +29,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import auth
 import db
 import pack_logic
+import trade_logic
 
 load_dotenv()  # .env (Projektwurzel oder backend/) laden
 
@@ -207,6 +208,123 @@ def open_pack(req: OpenPackRequest, request: Request) -> dict:
         return pack_logic.open_pack(user_id=user_id, pack_id=req.pack_id)
     except pack_logic.PackError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+# =====================================================================
+# User-Verzeichnis & fremde Sammlungen (eingeloggt; Basis für Trading/Freunde)
+# =====================================================================
+@app.get("/api/users")
+def users(request: Request) -> dict:
+    """Alle bekannten OAuth-User (außer mir selbst) — für die Handelspartner-Wahl."""
+    me_id = require_user(request)
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT user_id, username, avatar FROM app_users WHERE user_id != ? "
+            "ORDER BY username COLLATE NOCASE",
+            (me_id,),
+        ).fetchall()
+    return {"users": [
+        {"user_id": r["user_id"], "username": r["username"],
+         "avatar_url": avatar_url(r["user_id"], r["avatar"])}
+        for r in rows
+    ]}
+
+
+@app.get("/api/users/{user_id}/collection")
+def user_collection(user_id: str, request: Request) -> dict:
+    """Besitz-Anzahl je Karte EINES Users (eingeloggt einsehbar; auch eigene)."""
+    require_user(request)
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT card_id, count FROM user_cards WHERE user_id = ? AND count > 0",
+            (user_id,),
+        ).fetchall()
+    return {"user_id": user_id, "cards": {r["card_id"]: r["count"] for r in rows}}
+
+
+# =====================================================================
+# Trading (Phase 9b) — 1:1-Tausch zwischen eingeloggten Usern.
+# Die Logik liegt in trade_logic.py (auch vom Bot nutzbar); hier nur HTTP.
+# =====================================================================
+def _trade_view(t: dict) -> dict:
+    """Avatar-Hashes -> URLs für die Ausgabe (Frontend mappt Karten selbst)."""
+    t = dict(t)
+    t["from_avatar_url"] = avatar_url(t.get("from_user"), t.pop("from_avatar", None))
+    t["to_avatar_url"] = avatar_url(t.get("to_user"), t.pop("to_avatar", None))
+    return t
+
+
+def _trade_call(fn, *args):
+    """Ruft eine trade_logic-Funktion und übersetzt TradeError -> HTTPException."""
+    try:
+        return _trade_view(fn(*args))
+    except trade_logic.TradeError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+class CreateTradeRequest(BaseModel):
+    to_user: str
+    offered_card: str
+    requested_card: str
+
+
+class CounterTradeRequest(BaseModel):
+    offered_card: str
+    requested_card: str
+
+
+@app.get("/api/trades")
+def trades_list(request: Request) -> dict:
+    """Meine Trades, kategorisiert: incoming (ich am Zug), outgoing (warte), closed."""
+    me_id = require_user(request)
+    incoming, outgoing, closed = [], [], []
+    for t in trade_logic.list_trades(me_id):
+        v = _trade_view(t)
+        if v["status"] != trade_logic.OPEN:
+            closed.append(v)
+        elif v["turn_user"] == me_id:
+            incoming.append(v)
+        else:
+            outgoing.append(v)
+    return {"incoming": incoming, "outgoing": outgoing, "closed": closed}
+
+
+@app.get("/api/trades/{trade_id}")
+def trade_detail(trade_id: int, request: Request) -> dict:
+    me_id = require_user(request)
+    return _trade_call(trade_logic.get_trade, trade_id, me_id)
+
+
+@app.post("/api/trades")
+def trade_create(req: CreateTradeRequest, request: Request) -> dict:
+    me_id = require_user(request)
+    return _trade_call(trade_logic.create_trade, me_id, req.to_user,
+                       req.offered_card, req.requested_card)
+
+
+@app.post("/api/trades/{trade_id}/counter")
+def trade_counter(trade_id: int, req: CounterTradeRequest, request: Request) -> dict:
+    me_id = require_user(request)
+    return _trade_call(trade_logic.counter_trade, trade_id, me_id,
+                       req.offered_card, req.requested_card)
+
+
+@app.post("/api/trades/{trade_id}/accept")
+def trade_accept(trade_id: int, request: Request) -> dict:
+    me_id = require_user(request)
+    return _trade_call(trade_logic.accept_trade, trade_id, me_id)
+
+
+@app.post("/api/trades/{trade_id}/reject")
+def trade_reject(trade_id: int, request: Request) -> dict:
+    me_id = require_user(request)
+    return _trade_call(trade_logic.reject_trade, trade_id, me_id)
+
+
+@app.post("/api/trades/{trade_id}/cancel")
+def trade_cancel(trade_id: int, request: Request) -> dict:
+    me_id = require_user(request)
+    return _trade_call(trade_logic.cancel_trade, trade_id, me_id)
 
 
 # =====================================================================

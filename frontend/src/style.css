@@ -671,3 +671,149 @@ canvas {
   .admin-card-img { order: 0; }
   .admin-card-have { order: 0; }
 }
+
+/* ============================================================
+   Trading-Tab (Phase 9b)
+   ============================================================ */
+.trading-view {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #0b0d12;
+}
+.trading-view[hidden] { display: none; }
+
+.trading-body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.trade-msg { color: #94a3b8; font-size: 14px; }
+.trade-err { color: #fca5a5; }
+.trade-ok { color: #86efac; }
+.trade-fb { font-size: 13px; min-height: 1em; }
+
+.trade-top { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.trade-btn {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.trade-btn:hover { border-color: #64748b; }
+.trade-btn:disabled { opacity: 0.5; cursor: default; }
+.trade-btn-primary { border-color: #2563eb; color: #bfdbfe; }
+.trade-btn-primary:hover { border-color: #3b82f6; background: rgba(37, 99, 235, 0.18); }
+.trade-btn-warn { border-color: #7f1d1d; color: #fca5a5; }
+.trade-btn-warn:hover { border-color: #b91c1c; background: rgba(127, 29, 29, 0.25); }
+
+.trade-section { display: flex; flex-direction: column; gap: 10px; }
+.trade-h3 { font-size: 16px; font-weight: 700; color: #cbd5e1; margin: 0; }
+
+/* Neuer-Trade-Panel */
+.trade-new {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+}
+.trade-new[hidden] { display: none; }
+.trade-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.trade-picker { display: flex; flex-direction: column; gap: 6px; }
+.trade-picker-label { font-size: 13px; color: #94a3b8; }
+.trade-select {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.6);
+  color: #e2e8f0;
+  font-size: 14px;
+  max-width: 100%;
+}
+
+/* Trade-Karte */
+.trade-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+}
+.trade-card-head { display: flex; align-items: center; gap: 8px; }
+.trade-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; background: #1e293b; border: 1px solid #334155;
+}
+.trade-partner { font-weight: 600; font-size: 14px; }
+.trade-status {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+.trade-status.status-open { background: rgba(37, 99, 235, 0.2); color: #bfdbfe; }
+.trade-status.status-accepted { background: rgba(22, 163, 74, 0.2); color: #86efac; }
+.trade-status.status-rejected,
+.trade-status.status-cancelled { background: rgba(127, 29, 29, 0.25); color: #fca5a5; }
+
+/* Tausch-Paar */
+.trade-pair { display: flex; align-items: center; gap: 8px; }
+.trade-side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.trade-side-name {
+  font-size: 12px; color: #94a3b8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.trade-swap { flex: 0 0 auto; font-size: 20px; color: #64748b; }
+
+/* Karten-Chip (Vorschaubild + Name) */
+.trade-chip { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trade-chip-img {
+  width: 38px; height: 53px; flex: 0 0 auto;
+  object-fit: cover; border-radius: 5px;
+  background: #0b1220; border: 1px solid #334155;
+}
+.trade-chip-img.is-missing {
+  background: repeating-linear-gradient(45deg, #0b1220, #0b1220 6px, #14203a 6px, #14203a 12px);
+}
+.trade-chip-info { min-width: 0; }
+.trade-chip-name {
+  font-size: 13px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.trade-chip-sub { font-size: 11px; color: #64748b; }
+.trade-chip-wrap:empty { display: none; }
+
+.trade-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.trade-wait { font-size: 13px; color: #94a3b8; margin-right: auto; }
+
+/* Gegenvorschlag-Editor */
+.trade-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed #334155;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.4);
+}

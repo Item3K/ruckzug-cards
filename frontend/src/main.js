@@ -13,6 +13,7 @@ import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
 import { Admin, TUNING_LS_KEY } from './adminView.js';
+import { Trading } from './tradingView.js';
 import { applyLandingVars } from './landingConfig.js';
 import { DOUBLE_TAP_MS, TAP_VS_DRAG_THRESHOLD } from './config.js';
 
@@ -42,6 +43,7 @@ let isAdmin = false;      // Admin-Status (von der Landing via onAuthChange)
 let activeView = 'landing';
 let landing = null;
 let admin = null;
+let trading = null;
 let openingPanel = null;
 let landingPanel = null;
 let panelsLoading = false;
@@ -179,6 +181,20 @@ window.addEventListener('popstate', () => {
   else { admin.hide(); enterLanding(); }
 });
 
+// --- Trading (Overlay, kein Deep-Link nötig) ---
+function enterTrading() {
+  opening.setActive(false);
+  ui.setVisible(false);
+  landing.setActive(false);
+  showPanels('trading'); // Tuning-Panels im Trading-Tab ausblenden
+  trading.open();
+}
+
+function exitTrading() {
+  trading.hide();
+  enterLanding();
+}
+
 async function init() {
   start();
   await cardStack.loadTemplate(); // Karten-Rohling vorladen
@@ -193,6 +209,8 @@ async function init() {
     onClose: () => exitAdmin(),
     onTuningToggle: (enabled) => applyTuningPanels(enabled),
   });
+  // Trading-View (versteckt, bis geöffnet).
+  trading = new Trading({ onClose: () => exitTrading() });
 
   // Landing aufbauen + anzeigen (Default-View).
   landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
@@ -203,6 +221,7 @@ async function init() {
     applyTuningPanels(tuningEnabled()); // erstellt/zerstört Panels je nach Admin+Schalter
   };
   landing.onOpenAdmin = () => enterAdmin();
+  landing.onOpenTrading = () => enterTrading();
   await landing.build();
   landing.setActive(true);
 

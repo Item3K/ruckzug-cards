@@ -129,3 +129,45 @@ CREATE TABLE IF NOT EXISTS app_users (
     first_login  TEXT NOT NULL DEFAULT (datetime('now')),
     last_login   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- =====================================================================
+-- trades — 1:1-Kartentausch zwischen zwei Usern (Phase 9b, Website)
+--   from_user (A) bietet offered_card; to_user (B) gibt requested_card.
+--   Diese Rollen sind über den ganzen Trade FEST. Gegenvorschläge ändern nur
+--   die beiden Karten + wer am Zug ist (turn_user), nicht die Rollen.
+--   status: open | accepted | rejected | cancelled.
+--   turn_user = wer als Nächstes annehmen/ablehnen/kontern darf (NULL wenn beendet).
+--   Die Tausch-Logik liegt in backend/trade_logic.py (auch vom Bot nutzbar).
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS trades (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_user       TEXT    NOT NULL,                 -- A (Ersteller)
+    to_user         TEXT    NOT NULL,                 -- B (Empfänger)
+    offered_card    TEXT    NOT NULL,                 -- Karte, die A gibt
+    requested_card  TEXT    NOT NULL,                 -- Karte, die B gibt
+    status          TEXT    NOT NULL DEFAULT 'open',  -- open|accepted|rejected|cancelled
+    turn_user       TEXT,                             -- wer ist am Zug (NULL = beendet)
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (offered_card)   REFERENCES card_defs (card_id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_card) REFERENCES card_defs (card_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_trades_from   ON trades (from_user);
+CREATE INDEX IF NOT EXISTS idx_trades_to     ON trades (to_user);
+CREATE INDEX IF NOT EXISTS idx_trades_status ON trades (status);
+
+-- =====================================================================
+-- trade_history — Verlauf eines Trades (Erstellung + jeder Gegenvorschlag etc.)
+--   Für die Verhandlungs-Anzeige; ein Eintrag je Aktion.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS trade_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id        INTEGER NOT NULL,
+    actor           TEXT    NOT NULL,                 -- wer die Aktion ausgelöst hat
+    action          TEXT    NOT NULL,                 -- create|counter|accept|reject|cancel
+    offered_card    TEXT,                             -- Stand nach der Aktion (A-Seite)
+    requested_card  TEXT,                             -- Stand nach der Aktion (B-Seite)
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (trade_id) REFERENCES trades (id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_tradehist_trade ON trade_history (trade_id);
