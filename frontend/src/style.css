@@ -239,6 +239,35 @@ canvas {
 }
 .menu button:hover { background: rgba(148, 163, 184, 0.12); }
 
+/* Trading-Menüpunkt mit Badge (Anzahl eingehender Trades). */
+.menu-trade { display: flex; align-items: center; justify-content: space-between; }
+.menu-badge {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.menu-badge[hidden] { display: none; }
+
+/* Roter Punkt am Hamburger, wenn ein Trade auf mich wartet. */
+.hamburger { position: relative; }
+.burger-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1px solid #0b0d12;
+}
+.burger-dot[hidden] { display: none; }
+
 /* --- Set-Container (untereinander) --- */
 .sets {
   max-width: var(--set-maxw);

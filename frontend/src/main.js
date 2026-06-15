@@ -14,6 +14,7 @@ import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
 import { Admin, TUNING_LS_KEY } from './adminView.js';
 import { Trading } from './tradingView.js';
+import { listTrades } from './api.js';
 import { applyLandingVars } from './landingConfig.js';
 import { DOUBLE_TAP_MS, TAP_VS_DRAG_THRESHOLD } from './config.js';
 
@@ -151,6 +152,7 @@ function enterLanding() {
   landing.setActive(true);
   // refreshAuth aktualisiert Sanduhr-Stand + Pack-Gate (nach dem Opening), refresh den Fortschritt.
   landing.refreshAuth().then(() => landing.refresh());
+  refreshTradeBadge(); // Badge einmalig auffrischen (z.B. nach Rückkehr aus dem Trading-Tab)
   showPanels('landing');
 }
 
@@ -181,6 +183,13 @@ window.addEventListener('popstate', () => {
   else { admin.hide(); enterLanding(); }
 });
 
+// Badge einmalig auffrischen (kein Dauer-Polling außerhalb des Trading-Tabs).
+// Wird beim Betreten der Landing-Page und nach Auth-Wechsel aufgerufen.
+function refreshTradeBadge() {
+  if (!loggedIn) { landing.setTradeBadge(0); return; }
+  listTrades().then((d) => landing.setTradeBadge(d.incoming.length)).catch(() => {});
+}
+
 // --- Trading (Overlay, kein Deep-Link nötig) ---
 function enterTrading() {
   opening.setActive(false);
@@ -209,8 +218,12 @@ async function init() {
     onClose: () => exitAdmin(),
     onTuningToggle: (enabled) => applyTuningPanels(enabled),
   });
-  // Trading-View (versteckt, bis geöffnet).
-  trading = new Trading({ onClose: () => exitTrading() });
+  // Trading-View (versteckt, bis geöffnet). Während es offen ist, pollt es selbst
+  // und meldet die Zahl eingehender Trades fürs Menü-Badge zurück.
+  trading = new Trading({
+    onClose: () => exitTrading(),
+    onIncomingCount: (n) => { if (landing) landing.setTradeBadge(n); },
+  });
 
   // Landing aufbauen + anzeigen (Default-View).
   landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
@@ -219,6 +232,7 @@ async function init() {
     loggedIn = !!me.logged_in;
     isAdmin = !!me.is_admin;
     applyTuningPanels(tuningEnabled()); // erstellt/zerstört Panels je nach Admin+Schalter
+    refreshTradeBadge();                // Badge nach Login/Logout aktualisieren
   };
   landing.onOpenAdmin = () => enterAdmin();
   landing.onOpenTrading = () => enterTrading();

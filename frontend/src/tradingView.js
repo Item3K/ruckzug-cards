@@ -13,6 +13,9 @@ const STATUS_LABEL = {
   open: 'offen', accepted: 'angenommen', rejected: 'abgelehnt', cancelled: 'abgebrochen',
 };
 
+// Auto-Aktualisierung der Trade-Liste, solange der Tab offen + sichtbar ist.
+const POLL_INTERVAL_MS = 4000;
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -21,14 +24,21 @@ function el(tag, cls, text) {
 }
 
 export class Trading {
-  /** @param {{ onClose: ()=>void }} opts */
-  constructor({ onClose } = {}) {
+  /** @param {{ onClose: ()=>void, onIncomingCount?: (n:number)=>void }} opts */
+  constructor({ onClose, onIncomingCount } = {}) {
     this.onClose = onClose || (() => {});
+    this._onIncoming = onIncomingCount || null;
     this.sets = null;
     this.cardMap = {};      // card_id -> { id, name, rarity, finish, assetUrl }
     this.me = null;
     this.users = [];
     this.myCollection = {}; // card_id -> count
+
+    // Polling-State
+    this._pollTimer = null;
+    this._visHandler = null;
+    this._lastSig = null;   // Signatur der zuletzt gerenderten Trade-Liste
+    this._newPanel = null;  // Referenz aufs „Neuer Trade"-Panel (Busy-Erkennung)
 
     this.root = el('div', 'trading-view');
     this.root.hidden = true;
@@ -45,7 +55,10 @@ export class Trading {
     document.body.appendChild(this.root);
   }
 
-  hide() { this.root.hidden = true; }
+  hide() {
+    this._stopPolling();
+    this.root.hidden = true;
+  }
 
   async open() {
     this.root.hidden = false;
@@ -79,44 +92,113 @@ export class Trading {
       const [u, mine] = await Promise.all([listUsers(), getUserCollection(me.user_id)]);
       this.users = u.users || [];
       this.myCollection = mine.cards || {};
-      await this._refresh();
+      await this._hardRefresh();
+      this._startPolling();
     } catch (e) {
       this.body.innerHTML = '';
       this.body.appendChild(el('p', 'trade-msg trade-err', `Fehler: ${e.message || e}`));
     }
   }
 
-  async _refresh() {
+  /** Holt Trades (+ eigene Sammlung) und rendert hart neu. Für Start/Button/Aktionen. */
+  async _hardRefresh() {
+    let data;
+    try { data = await listTrades(); } catch (e) {
+      this.body.innerHTML = '';
+      this.body.appendChild(el('p', 'trade-msg trade-err', `Fehler: ${e.message || e}`));
+      return;
+    }
+    try {
+      const mine = await getUserCollection(this.me.user_id);
+      this.myCollection = mine.cards || {};
+    } catch { /* eigene Sammlung optional */ }
+    this._render(data);
+    this._lastSig = this._signature(data);
+    if (this._onIncoming) this._onIncoming(data.incoming.length);
+  }
+
+  /** Baut die Ansicht aus bereits geladenen Daten auf (kein Netz-Zugriff). */
+  _render(data) {
     this.body.innerHTML = '';
 
     const top = el('div', 'trade-top');
     const newBtn = el('button', 'trade-btn trade-btn-primary', '+ Neuer Trade');
     const reload = el('button', 'trade-btn', 'Aktualisieren');
-    reload.addEventListener('click', () => this._reloadAll());
+    reload.addEventListener('click', () => this._hardRefresh());
     top.append(newBtn, reload);
     this.body.appendChild(top);
 
     const newPanel = this._buildNewTrade();
+    this._newPanel = newPanel;
     this.body.appendChild(newPanel);
     newBtn.addEventListener('click', () => { newPanel.hidden = !newPanel.hidden; });
 
-    let data;
-    try { data = await listTrades(); } catch (e) {
-      this.body.appendChild(el('p', 'trade-msg trade-err', `Fehler: ${e.message || e}`));
-      return;
-    }
     this.body.appendChild(this._section('Du bist am Zug', data.incoming, 'incoming'));
     this.body.appendChild(this._section('Warten auf Antwort', data.outgoing, 'outgoing'));
     this.body.appendChild(this._section('Abgeschlossen', data.closed, 'closed'));
   }
 
-  /** Wie _refresh, aber lädt auch meine Sammlung neu (nach abgeschlossenem Tausch). */
-  async _reloadAll() {
+  // --- Auto-Polling ---------------------------------------------------------
+  /**
+   * Pollt die Trade-Liste. Re-Rendert NUR, wenn der Tab sichtbar ist, der Nutzer
+   * gerade nichts bearbeitet (Busy-Guard) UND sich wirklich etwas geändert hat
+   * (Signatur-Vergleich) — so werden offene Eingaben nie zerstört und es gibt
+   * keine unnötigen „Sprünge". Den Badge-Zähler aktualisieren wir aber immer.
+   */
+  async _poll() {
+    if (this.root.hidden || document.hidden) return;
+    let data;
+    try { data = await listTrades(); } catch { return; } // transiente Fehler ignorieren
+    if (this._onIncoming) this._onIncoming(data.incoming.length);
+    if (this._isBusy()) return;
+    if (this._signature(data) === this._lastSig) return;
     try {
       const mine = await getUserCollection(this.me.user_id);
       this.myCollection = mine.cards || {};
-    } catch { /* egal, _refresh zeigt ggf. Fehler */ }
-    await this._refresh();
+    } catch { /* optional */ }
+    this._render(data);
+    this._lastSig = this._signature(data);
+  }
+
+  _signature(data) {
+    const rows = [...data.incoming, ...data.outgoing, ...data.closed].map(
+      (t) => `${t.id}:${t.status}:${t.turn_user}:${t.offered_card}:${t.requested_card}:${t.updated_at}`,
+    );
+    return rows.sort().join('|');
+  }
+
+  /** Bearbeitet der Nutzer gerade etwas? Dann NICHT automatisch neu rendern. */
+  _isBusy() {
+    if (this._newPanel && !this._newPanel.hidden) return true;   // „Neuer Trade" offen
+    if (this.root.querySelector('.trade-counter')) return true;  // Gegenvorschlag-Editor offen
+    const a = document.activeElement;                            // ein Feld ist fokussiert
+    if (a && this.root.contains(a) && ['SELECT', 'INPUT', 'TEXTAREA'].includes(a.tagName)) return true;
+    return false;
+  }
+
+  _startPolling() {
+    this._stopPolling();
+    // Im Hintergrund-Tab pausieren (Ressourcen schonen), bei Rückkehr weiterlaufen.
+    this._visHandler = () => { if (document.hidden) this._clearTimer(); else this._ensureTimer(); };
+    document.addEventListener('visibilitychange', this._visHandler);
+    this._ensureTimer();
+  }
+
+  _ensureTimer() {
+    if (this._pollTimer || document.hidden || this.root.hidden) return;
+    this._pollTimer = setInterval(() => this._poll(), POLL_INTERVAL_MS);
+  }
+
+  _clearTimer() {
+    if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+  }
+
+  _stopPolling() {
+    this._clearTimer();
+    if (this._visHandler) {
+      document.removeEventListener('visibilitychange', this._visHandler);
+      this._visHandler = null;
+    }
   }
 
   _section(title, trades, kind) {
@@ -177,7 +259,7 @@ export class Trading {
       send.disabled = true;
       try {
         await createTrade(partner, mine, theirs);
-        await this._refresh();
+        await this._hardRefresh();
       } catch (e) { this._flash(fb, e.message || String(e), true); send.disabled = false; }
     });
 
@@ -211,7 +293,7 @@ export class Trading {
     const actions = el('div', 'trade-actions');
     const run = async (fn) => {
       actions.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-      try { await fn(); await this._reloadAll(); }
+      try { await fn(); await this._hardRefresh(); }
       catch (e) {
         this._flash(fb, e.message || String(e), true);
         actions.querySelectorAll('button').forEach((b) => { b.disabled = false; });

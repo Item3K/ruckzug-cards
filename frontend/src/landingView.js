@@ -61,6 +61,10 @@ export class Landing {
 
     const burger = el('button', 'hamburger', '≡');
     burger.setAttribute('aria-label', 'Menü');
+    // Roter Punkt am Hamburger, wenn ein Trade auf mich wartet (auch ohne geöffnetes Menü).
+    this._burgerDot = el('span', 'burger-dot');
+    this._burgerDot.hidden = true;
+    burger.appendChild(this._burgerDot);
     const menu = el('nav', 'menu');
     menu.hidden = true;
 
@@ -75,7 +79,13 @@ export class Landing {
     menu.appendChild(el('hr', 'menu-sep'));
 
     for (const label of ['Dex', 'Freunde', 'Trading']) {
-      const b = el('button', null, label);
+      const b = el('button', label === 'Trading' ? 'menu-trade' : null, label);
+      if (label === 'Trading') {
+        // Zähler eingehender Trades (ich bin am Zug).
+        this._tradeBadge = el('span', 'menu-badge', '0');
+        this._tradeBadge.hidden = true;
+        b.appendChild(this._tradeBadge);
+      }
       b.addEventListener('click', () => {
         menu.hidden = true;
         if (label === 'Trading') {
@@ -123,8 +133,16 @@ export class Landing {
     }
     this._adminBtn.hidden = !this.me.is_admin; // Admin-Menüpunkt nur für Admins
     this._applyPackGate();                     // Packs bei 0 Sanduhren sperren
+    if (!this.me.logged_in) this.setTradeBadge(0); // ausgeloggt -> kein Badge
     if (this.onAuthChange) this.onAuthChange(this.me);
     return this.me;
+  }
+
+  /** Badge am Trading-Menüpunkt + roter Punkt am Hamburger (Anzahl eingehender Trades). */
+  setTradeBadge(n) {
+    const show = n > 0;
+    if (this._tradeBadge) { this._tradeBadge.textContent = String(n); this._tradeBadge.hidden = !show; }
+    if (this._burgerDot) this._burgerDot.hidden = !show;
   }
 
   _buildPlaceholder() {
