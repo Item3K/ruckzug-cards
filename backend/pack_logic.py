@@ -181,3 +181,72 @@ def open_pack(user_id: str, pack_id: str, rng: random.Random | None = None) -> d
         "beam_stage": beam_stage,
         "hourglasses_remaining": remaining,
     }
+
+
+def _card_dict(c: CardDef) -> dict:
+    return {
+        "card_id": c.card_id, "name": c.name, "rarity": c.rarity,
+        "finish": c.finish, "set_id": c.set_id, "asset": c.asset,
+    }
+
+
+def open_pack_multi(user_id: str, pack_id: str, count: int = 10,
+                    rng: random.Random | None = None) -> dict:
+    """Öffnet ``count`` Packs DESSELBEN Typs in EINER Transaktion (x10-Modus).
+
+    Atomar: zieht ``count × HOURGLASS_COST`` Sanduhren nur ab, wenn genug da sind
+    (sonst PackError, kein Teil-Abzug). Würfelt jedes Pack mit derselben Slot-Logik
+    wie beim Einzel-Öffnen, verbucht ALLE Karten und gibt pro Päckchen die 10 Karten
+    + die eigene Beam-Stufe zurück.
+    """
+    total_cost = cfg.HOURGLASS_COST * count
+    with db.connection() as conn:
+        # Pool + Würfel-Konfig (prüft auch, ob das Pack existiert) — vor dem Abzug.
+        pool, draw_config = get_pack(conn, pack_id)
+
+        # a) Sanduhren atomar abziehen: nur, wenn aktuell genug da sind.
+        upd = conn.execute(
+            "UPDATE hourglasses SET count = count - ?, updated_at = datetime('now') "
+            "WHERE user_id = ? AND count >= ?",
+            (total_cost, user_id, total_cost),
+        )
+        if upd.rowcount != 1:
+            row = conn.execute(
+                "SELECT count FROM hourglasses WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            have = row["count"] if row else 0
+            raise PackError(
+                400, f"Zu wenig Sanduhren: hast {have}, brauchst {total_cost}.",
+            )
+        remaining = conn.execute(
+            "SELECT count FROM hourglasses WHERE user_id = ?", (user_id,)
+        ).fetchone()["count"]
+
+        # b) count Packs würfeln (rein, ohne DB) + Karten aggregiert verbuchen.
+        packs_drawn = [draw_pack(pool, draw_config, rng=rng) for _ in range(count)]
+        counts: dict[str, int] = {}
+        for drawn in packs_drawn:
+            for c in drawn:
+                counts[c.card_id] = counts.get(c.card_id, 0) + 1
+        for card_id, n in counts.items():
+            conn.execute(
+                "INSERT INTO user_cards (user_id, card_id, count, updated_at) "
+                "VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(user_id, card_id) DO UPDATE SET "
+                "count = count + excluded.count, updated_at = datetime('now')",
+                (user_id, card_id, n),
+            )
+
+    # c) Antwort: pro Päckchen die Karten + eigene Beam-Stufe.
+    return {
+        "pack_id": pack_id,
+        "count": count,
+        "packs": [
+            {
+                "drawn_cards": [_card_dict(c) for c in drawn],
+                "beam_stage": determine_beam_stage(drawn),
+            }
+            for drawn in packs_drawn
+        ],
+        "hourglasses_remaining": remaining,
+    }

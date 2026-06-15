@@ -50,6 +50,11 @@ const GROUPS = {
     ['SWIPE_RETURN_DURATION', 0.1, 1, 0.02, 'Zurückfedern'],
     ['TAP_VS_DRAG_THRESHOLD', 2, 40, 1, 'Tap/Drag-Schwelle'],
   ],
+  x10: [
+    ['X10_SPACING', 1.5, 6, 0.1, 'Pack-Abstand (Reihe)'],
+    ['X10_TRANSITION', 0.2, 1.5, 0.05, 'Vorrück-Tempo'],
+    ['X10_RIP_DELAY', 0, 0.6, 0.02, 'Aufreiß-Versatz'],
+  ],
 };
 
 // Pfeile (size/gap als Zahl, Farbe separat).

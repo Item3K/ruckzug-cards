@@ -9,6 +9,7 @@ import { createUI } from './ui.js';
 import { Beam } from './beam.js';
 import { CardStack } from './cardStack.js';
 import { RevealSequence } from './revealSequence.js';
+import { RevealX10 } from './revealX10.js';
 import { TweenManager } from './tween.js';
 import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
@@ -36,9 +37,11 @@ onFrame((delta) => {
   beam.update(delta);
   cardStack.update(delta);
   rotator.update(delta);
+  if (revealX10) revealX10.update(delta); // x10-Pack-Reihe (Rip-Mixer)
 });
 
 let currentPack = null;
+let revealX10 = null;     // x10-Orchestrator (nach ui erstellt)
 let loggedIn = false;     // Login-Status (von der Landing via onAuthChange)
 let isAdmin = false;      // Admin-Status (von der Landing via onAuthChange)
 let activeView = 'landing';
@@ -63,10 +66,17 @@ const reveal = new RevealSequence({
   onComplete: () => enterLanding(), // Auto-Zurück nach der letzten Karte
 });
 
+// x10-Modus (10 Packs auf einmal) — teilt sich beam/cardStack/ui mit dem Einzel-Opening.
+revealX10 = new RevealX10({
+  scene, camera, beam, cardStack, tweens, ui,
+  onComplete: () => enterLanding(),
+});
+
 // Doppelklick / Doppel-Tap auf das Pack (Opening-Canvas) startet das Öffnen.
 // Einzelklick/Drag dreht weiter (DragRotator); ein Drag zählt nicht als Tap.
 // Die Seite (vorne/hinten) bestimmt reveal.start im Moment des Doppel-Taps.
 attachDoubleTap(renderer.domElement, () => {
+  if (revealX10 && revealX10.active) return; // im x10-Modus kein Einzel-Öffnen
   if (currentPack) reveal.start(currentPack.backendPackId);
 });
 
@@ -145,8 +155,23 @@ function enterOpening(pack) {
   loadPack(pack);
 }
 
+// x10-Modus starten (10 Packs desselben Typs auf einmal).
+function enterOpeningX10(pack) {
+  if (!loggedIn) { landing.promptLogin(); return; }
+  reveal.reset();        // evtl. Einzel-Opening-Reste sauber
+  revealX10.reset();
+  viewer.dispose();      // kein Einzel-Pack im Bild
+  currentPack = pack;
+  landing.setActive(false);
+  opening.setActive(true);
+  ui.setVisible(true);
+  showPanels('opening');
+  revealX10.start(pack.backendPackId, pack.file);
+}
+
 function enterLanding() {
   reveal.reset();
+  if (revealX10) revealX10.reset();
   opening.setActive(false);
   ui.setVisible(false);
   landing.setActive(true);
@@ -229,7 +254,10 @@ async function init() {
   });
 
   // Landing aufbauen + anzeigen (Default-View).
-  landing = new Landing({ onPackClick: (pack) => enterOpening(pack) });
+  landing = new Landing({
+    onPackClick: (pack) => enterOpening(pack),
+    onPackX10: (pack) => enterOpeningX10(pack),
+  });
   // vor build(), damit der erste refreshAuth greift: Login-/Admin-Status + Panels.
   landing.onAuthChange = (me) => {
     loggedIn = !!me.logged_in;

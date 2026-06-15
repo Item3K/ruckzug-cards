@@ -39,6 +39,15 @@ export async function openPack(packId) {
   }));
 }
 
+/** Öffnet 10 Packs desselben Typs auf einmal (kostet 10 Sanduhren). */
+export async function openPackX10(packId) {
+  return jsonOrThrow(await fetch('/api/open-pack-x10', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pack_id: packId }),
+  }));
+}
+
 /** Besessene card_ids des eingeloggten Users für ein Set. */
 export async function getCollection(setId) {
   return jsonOrThrow(await fetch(`/api/collection?set_id=${encodeURIComponent(setId)}`));

@@ -210,6 +210,16 @@ def open_pack(req: OpenPackRequest, request: Request) -> dict:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 
+@app.post("/api/open-pack-x10")
+def open_pack_x10(req: OpenPackRequest, request: Request) -> dict:
+    """Öffnet 10 Packs DESSELBEN Typs auf einmal (kostet 10 Sanduhren, atomar)."""
+    user_id = require_user(request)
+    try:
+        return pack_logic.open_pack_multi(user_id=user_id, pack_id=req.pack_id, count=10)
+    except pack_logic.PackError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
 # =====================================================================
 # User-Verzeichnis & fremde Sammlungen (eingeloggt; Basis für Trading/Freunde)
 # =====================================================================

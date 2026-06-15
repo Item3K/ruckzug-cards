@@ -18,9 +18,10 @@ function el(tag, cls, text) {
 }
 
 export class Landing {
-  /** @param {{ onPackClick: (pack:{id,label,file,backendPackId})=>void }} opts */
-  constructor({ onPackClick }) {
+  /** @param {{ onPackClick: (pack)=>void, onPackX10?: (pack)=>void }} opts */
+  constructor({ onPackClick, onPackX10 }) {
     this.onPackClick = onPackClick;
+    this.onPackX10 = onPackX10 || (() => {});
     this.idle = new IdlePacks();
     this.me = { logged_in: false };
     this.onAuthChange = null;   // (me) => void, gesetzt von main (für die Opening-Gate)
@@ -187,6 +188,11 @@ export class Landing {
       const row = el('div', 'pack-row');
       this._rows.push(row);
       for (const pack of set.packs) {
+        const cell = el('div', 'pack-cell');
+        const packInfo = {
+          id: pack.id, label: pack.label, file: pack.ripUrl, backendPackId: pack.backendPackId,
+        };
+
         const tile = el('button', 'pack-tile');
         tile.type = 'button';
         const stage = el('div', 'pack-stage');
@@ -201,13 +207,25 @@ export class Landing {
         tile.appendChild(footer);
         tile.addEventListener('click', () => {
           if (tile.classList.contains('locked')) return; // 0 Sanduhren -> nicht öffenbar
-          this.onPackClick({
-            id: pack.id, label: pack.label, file: pack.ripUrl, backendPackId: pack.backendPackId,
-          });
+          this.onPackClick(packInfo);
         });
-        row.appendChild(tile);
+        cell.appendChild(tile);
 
-        this._packEls.push({ setId: set.id, pack, progressEl: prog, tileEl: tile, lockEl: lock });
+        // x10-Button (öffnet 10 Packs, kostet 10 Sanduhren).
+        const x10 = el('button', 'pack-x10-btn', '×10');
+        x10.type = 'button';
+        x10.title = '10 Packs auf einmal (10 Sanduhren)';
+        x10.addEventListener('click', () => {
+          if (x10.classList.contains('locked')) return; // < 10 Sanduhren
+          this.onPackX10(packInfo);
+        });
+        cell.appendChild(x10);
+
+        row.appendChild(cell);
+
+        this._packEls.push({
+          setId: set.id, pack, progressEl: prog, tileEl: tile, lockEl: lock, x10El: x10,
+        });
         // Idle-GLB asynchron anhängen (rendert, sobald geladen).
         this.idle.add(stage, pack.idleUrl).catch((e) => console.warn('idle-GLB:', e));
       }
@@ -277,12 +295,16 @@ export class Landing {
     }
   }
 
-  /** Packs sperren (ausgrauen), wenn eingeloggt und 0 Sanduhren. */
+  /** Packs sperren: Einzel ab 0 Sanduhren, x10 ab < 10 (jeweils nur eingeloggt). */
   _applyPackGate() {
-    const locked = this.me.logged_in && (this.me.hourglasses ?? 0) <= 0;
+    const hg = this.me.hourglasses ?? 0;
+    const single = this.me.logged_in && hg <= 0;
+    const x10 = this.me.logged_in && hg < 10;
     for (const pe of this._packEls) {
-      pe.tileEl.classList.toggle('locked', locked);
-      pe.lockEl.hidden = !locked;
+      pe.tileEl.classList.toggle('locked', single);
+      pe.lockEl.hidden = !single;
+      pe.x10El.classList.toggle('locked', x10);
+      pe.x10El.title = x10 ? 'Mind. 10 Sanduhren nötig' : '10 Packs auf einmal (10 Sanduhren)';
     }
   }
 
