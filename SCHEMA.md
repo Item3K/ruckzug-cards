@@ -113,31 +113,41 @@ und Handelspartner-Listen sowie Avatar-Anzeige. (Nicht zu verwechseln mit der al
 | `first_login` | TEXT | erster Login |
 | `last_login` | TEXT | letzter Login |
 
-### `trades` — 1:1-Kartentausch zwischen zwei Usern (Phase 9b)
-A (`from_user`) bietet `offered_card`, B (`to_user`) gibt `requested_card`. Die Rollen
-A/B sind über den ganzen Trade **fest**; Gegenvorschläge ändern nur die beiden Karten
-und `turn_user`. Ausführung atomar in [`backend/trade_logic.py`](backend/trade_logic.py)
-(auch vom Discord-Bot wiederverwendbar).
+### `trades` — Mehrkarten-Tausch zwischen zwei Usern (Phase 9b)
+A (`from_user`) bietet 1–5 Karten, B (`to_user`) gibt 1–5 Karten. Die konkreten Karten
+stehen in **`trade_items`** (nicht mehr als Einzelspalten). Rollen A/B sind über den
+ganzen Trade **fest**; Gegenvorschläge ändern nur die Karten-Listen und `turn_user`.
+Ausführung atomar in [`backend/trade_logic.py`](backend/trade_logic.py) (auch vom
+Discord-Bot wiederverwendbar).
 | Spalte | Typ | Bedeutung |
 |---|---|---|
 | `id` | INTEGER PK AI | Trade-ID |
 | `from_user` | TEXT | A — Ersteller |
 | `to_user` | TEXT | B — Empfänger |
-| `offered_card` | TEXT FK→`card_defs` | Karte, die A gibt |
-| `requested_card` | TEXT FK→`card_defs` | Karte, die B gibt |
 | `status` | TEXT | `open` / `accepted` / `rejected` / `cancelled` |
 | `turn_user` | TEXT | wer ist am Zug (NULL = beendet) |
 | `created_at` | TEXT | Erstellzeit |
 | `updated_at` | TEXT | letzte Änderung |
 
+### `trade_items` — Karten eines Trades je Seite (Verknüpfungstabelle)
+Eine Zeile je Karte und Seite. Der PK verhindert seiteninterne Duplikate; die Logik
+stellt zusätzlich 1–5 Karten/Seite und **keine Überschneidung** zwischen den Seiten sicher.
+| Spalte | Typ | Bedeutung |
+|---|---|---|
+| `trade_id` | INTEGER FK→`trades` | zugehöriger Trade |
+| `side` | TEXT | `from` (A bietet) / `to` (B gibt) |
+| `card_id` | TEXT FK→`card_defs` | Karte |
+| | | **PK = (`trade_id`, `side`, `card_id`)** |
+
 ### `trade_history` — Verlauf eines Trades (Verhandlung)
 Ein Eintrag je Aktion (Erstellung, jeder Gegenvorschlag, Abschluss) für die Anzeige.
+Die Karten-Listen werden als **JSON-Array** (`card_id`s) je Seite als Schnappschuss abgelegt.
 | Spalte | Typ | Bedeutung |
 |---|---|---|
 | `id` | INTEGER PK AI | |
 | `trade_id` | INTEGER FK→`trades` | zugehöriger Trade |
 | `actor` | TEXT | wer die Aktion ausgelöst hat |
 | `action` | TEXT | `create` / `counter` / `accept` / `reject` / `cancel` |
-| `offered_card` | TEXT | Karten-Stand nach der Aktion (A-Seite) |
-| `requested_card` | TEXT | Karten-Stand nach der Aktion (B-Seite) |
+| `from_cards` | TEXT (JSON) | A-Seite-Karten nach der Aktion |
+| `to_cards` | TEXT (JSON) | B-Seite-Karten nach der Aktion |
 | `created_at` | TEXT | Zeit der Aktion |

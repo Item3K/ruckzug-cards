@@ -15,6 +15,8 @@ const STATUS_LABEL = {
 
 // Auto-Aktualisierung der Trade-Liste, solange der Tab offen + sichtbar ist.
 const POLL_INTERVAL_MS = 4000;
+// Max. Karten pro Seite (muss zur Backend-Regel in trade_logic.py passen).
+const MAX_PER_SIDE = 5;
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -162,7 +164,7 @@ export class Trading {
 
   _signature(data) {
     const rows = [...data.incoming, ...data.outgoing, ...data.closed].map(
-      (t) => `${t.id}:${t.status}:${t.turn_user}:${t.offered_card}:${t.requested_card}:${t.updated_at}`,
+      (t) => `${t.id}:${t.status}:${t.turn_user}:${(t.from_cards || []).join(',')}:${(t.to_cards || []).join(',')}:${t.updated_at}`,
     );
     return rows.sort().join('|');
   }
@@ -225,45 +227,45 @@ export class Trading {
     const partnerRow = el('div', 'trade-row');
     partnerRow.append(el('div', 'trade-picker-label', 'Partner'), pSel);
 
-    const myPicker = this._cardPicker(this.myCollection, null, 'Deine Karte (du gibst)');
-    const theirWrap = el('div', 'trade-their');
-    theirWrap.appendChild(el('p', 'trade-msg', 'Erst einen Partner wählen.'));
-    let theirPicker = null;
+    const editorWrap = el('div', 'trade-editor-wrap');
+    editorWrap.appendChild(el('p', 'trade-msg', 'Erst einen Partner wählen.'));
+    let editor = null;
 
     pSel.addEventListener('change', async () => {
-      theirWrap.innerHTML = '';
-      theirPicker = null;
-      if (!pSel.value) { theirWrap.appendChild(el('p', 'trade-msg', 'Erst einen Partner wählen.')); return; }
-      theirWrap.appendChild(el('p', 'trade-msg', 'Lädt Sammlung …'));
+      editor = null;
+      editorWrap.innerHTML = '';
+      if (!pSel.value) { editorWrap.appendChild(el('p', 'trade-msg', 'Erst einen Partner wählen.')); return; }
+      editorWrap.appendChild(el('p', 'trade-msg', 'Lädt Sammlung …'));
       try {
         const coll = await getUserCollection(pSel.value);
         const name = pSel.options[pSel.selectedIndex].text;
-        theirWrap.innerHTML = '';
-        theirPicker = this._cardPicker(coll.cards || {}, null, `Karte von ${name} (du bekommst)`);
-        theirWrap.appendChild(theirPicker);
+        editorWrap.innerHTML = '';
+        editor = this._buildEditor({
+          fromColl: this.myCollection, toColl: coll.cards || {},
+          fromName: 'Du', toName: name,
+        });
+        editorWrap.appendChild(editor.el);
       } catch (e) {
-        theirWrap.innerHTML = '';
-        theirWrap.appendChild(el('p', 'trade-msg trade-err', `Sammlung konnte nicht geladen werden: ${e.message || e}`));
+        editorWrap.innerHTML = '';
+        editorWrap.appendChild(el('p', 'trade-msg trade-err', `Sammlung konnte nicht geladen werden: ${e.message || e}`));
       }
     });
 
     const send = el('button', 'trade-btn trade-btn-primary', 'Vorschlag senden');
     const fb = el('div', 'trade-fb');
     send.addEventListener('click', async () => {
-      const partner = pSel.value;
-      const mine = myPicker._select.value;
-      const theirs = theirPicker && theirPicker._select.value;
-      if (!partner) { this._flash(fb, 'Bitte einen Partner wählen.', true); return; }
-      if (!mine) { this._flash(fb, 'Bitte deine Karte wählen.', true); return; }
-      if (!theirs) { this._flash(fb, 'Bitte die gewünschte Karte wählen.', true); return; }
+      if (!pSel.value) { this._flash(fb, 'Bitte einen Partner wählen.', true); return; }
+      if (!editor) { this._flash(fb, 'Bitte Karten wählen.', true); return; }
+      const from = editor.getFrom(); const to = editor.getTo();
+      if (!from.length || !to.length) { this._flash(fb, 'Beide Seiten brauchen mindestens 1 Karte.', true); return; }
       send.disabled = true;
       try {
-        await createTrade(partner, mine, theirs);
+        await createTrade(pSel.value, from, to);
         await this._hardRefresh();
       } catch (e) { this._flash(fb, e.message || String(e), true); send.disabled = false; }
     });
 
-    panel.append(partnerRow, myPicker, theirWrap, send, fb);
+    panel.append(partnerRow, editorWrap, send, fb);
     return panel;
   }
 
@@ -282,11 +284,11 @@ export class Trading {
     head.appendChild(el('span', `trade-status status-${t.status}`, STATUS_LABEL[t.status] || t.status));
     card.appendChild(head);
 
-    // Tausch-Paar: A (from) gibt offered_card  ⇄  B (to) gibt requested_card.
+    // Tausch-Listen: A (from) gibt seine Karten  ⇄  B (to) gibt seine Karten.
     const pair = el('div', 'trade-pair');
-    pair.appendChild(this._sideBlock(t.from_username || t.from_user, t.offered_card, t.from_user === meId));
+    pair.appendChild(this._sideBlock(t.from_username || t.from_user, t.from_cards || [], t.from_user === meId));
     pair.appendChild(el('div', 'trade-swap', '⇄'));
-    pair.appendChild(this._sideBlock(t.to_username || t.to_user, t.requested_card, t.to_user === meId));
+    pair.appendChild(this._sideBlock(t.to_username || t.to_user, t.to_cards || [], t.to_user === meId));
     card.appendChild(pair);
 
     const fb = el('div', 'trade-fb');
@@ -320,14 +322,17 @@ export class Trading {
     return card;
   }
 
-  _sideBlock(name, cardId, isMe) {
+  _sideBlock(name, cardIds, isMe) {
     const block = el('div', 'trade-side');
     block.appendChild(el('div', 'trade-side-name', isMe ? `${name} (du)` : name));
-    block.appendChild(this._cardChip(cardId));
+    const list = el('div', 'trade-side-cards');
+    if (!cardIds.length) list.appendChild(el('div', 'trade-msg', '—'));
+    else for (const id of cardIds) list.appendChild(this._cardChip(id));
+    block.appendChild(list);
     return block;
   }
 
-  /** Gegenvorschlag-Editor unter der Karte: beide Seiten neu zusammenstellen. */
+  /** Gegenvorschlag-Editor unter der Karte: beide Listen vorbefüllt, frei anpassbar. */
   async _openCounter(card, t, fb, run, counterBtn) {
     if (card.querySelector('.trade-counter')) return; // schon offen
     counterBtn.disabled = true;
@@ -346,55 +351,136 @@ export class Trading {
       return;
     }
     ed.innerHTML = '';
-    const pickA = this._cardPicker(collA.cards || {}, t.offered_card, `${t.from_username || t.from_user} gibt`);
-    const pickB = this._cardPicker(collB.cards || {}, t.requested_card, `${t.to_username || t.to_user} gibt`);
+    const editor = this._buildEditor({
+      fromColl: collA.cards || {}, toColl: collB.cards || {},
+      fromName: t.from_username || t.from_user, toName: t.to_username || t.to_user,
+      fromPreset: t.from_cards || [], toPreset: t.to_cards || [],
+    });
     const send = el('button', 'trade-btn trade-btn-primary', 'Gegenvorschlag senden');
     const close = el('button', 'trade-btn', 'Verwerfen');
     send.addEventListener('click', () => {
-      const a = pickA._select.value; const b = pickB._select.value;
-      if (!a || !b) { this._flash(fb, 'Bitte beide Karten wählen.', true); return; }
-      run(() => counterTrade(t.id, a, b));
+      const from = editor.getFrom(); const to = editor.getTo();
+      if (!from.length || !to.length) { this._flash(fb, 'Beide Seiten brauchen mindestens 1 Karte.', true); return; }
+      run(() => counterTrade(t.id, from, to));
     });
     close.addEventListener('click', () => { ed.remove(); counterBtn.disabled = false; });
     const row = el('div', 'trade-row'); row.append(send, close);
-    ed.append(pickA, pickB, row);
+    ed.append(editor.el, row);
   }
 
-  // --- Karten-Bausteine -----------------------------------------------------
-  _cardPicker(collection, presetId, label) {
-    const wrap = el('div', 'trade-picker');
-    if (label) wrap.appendChild(el('div', 'trade-picker-label', label));
-    const select = el('select', 'trade-select');
-    this._fillCardSelect(select, collection);
-    if (presetId) select.value = presetId;
-    const preview = el('div', 'trade-chip-wrap');
-    const renderPrev = () => {
-      preview.innerHTML = '';
-      if (select.value) preview.appendChild(this._cardChip(select.value));
+  // --- Mehr-Slot-Editor (beide Seiten, 1–5 Karten, mit Ausschluss) ----------
+  /**
+   * Baut einen Editor für beide Seiten. Jede Seite hat 1–5 Slots (Select + Vorschau
+   * + Entfernen) und einen „+ Karte"-Button. Optionen je Slot = besessene Karten der
+   * Seite OHNE Karten, die anderswo (gleiche oder andere Seite) schon gewählt sind
+   * -> keine Duplikate, keine Überschneidung. Rückgabe: { el, getFrom(), getTo() }.
+   */
+  _buildEditor({ fromColl, toColl, fromName, toName, fromPreset = [], toPreset = [] }) {
+    const colls = { from: fromColl, to: toColl };
+    const names = { from: fromName, to: toName };
+    const state = { from: [], to: [] };       // je Seite: Array von { select, preview, row }
+    const containers = {};
+    const addButtons = {};
+    const wrap = el('div', 'trade-editor');
+
+    const usedSet = (exceptSlot) => {
+      const s = new Set();
+      for (const side of ['from', 'to']) {
+        for (const slot of state[side]) {
+          if (slot === exceptSlot) continue;
+          if (slot.select.value) s.add(slot.select.value);
+        }
+      }
+      return s;
     };
-    select.addEventListener('change', renderPrev);
-    renderPrev();
-    wrap.append(select, preview);
-    wrap._select = select;
-    return wrap;
+
+    const refreshAll = () => {
+      for (const side of ['from', 'to']) {
+        for (const slot of state[side]) {
+          this._fillSideSelect(slot.select, colls[side], usedSet(slot), slot.select.value);
+          this._updateSlotPreview(slot);
+        }
+        addButtons[side].disabled = state[side].length >= MAX_PER_SIDE;
+      }
+    };
+
+    const addSlot = (side, presetId = '') => {
+      if (state[side].length >= MAX_PER_SIDE) return;
+      const row = el('div', 'trade-slot');
+      const select = el('select', 'trade-select');
+      const preview = el('div', 'trade-chip-wrap');
+      const rm = el('button', 'trade-slot-rm', '✕');
+      rm.title = 'Entfernen';
+      rm.type = 'button';
+      const slot = { side, row, select, preview };
+      select.addEventListener('change', refreshAll);
+      rm.addEventListener('click', () => {
+        const i = state[side].indexOf(slot);
+        if (i >= 0) state[side].splice(i, 1);
+        row.remove();
+        refreshAll();
+      });
+      row.append(select, preview, rm);
+      containers[side].appendChild(row);
+      state[side].push(slot);
+      this._fillSideSelect(select, colls[side], usedSet(slot), presetId);
+      if (presetId) select.value = presetId;
+      refreshAll();
+    };
+
+    for (const side of ['from', 'to']) {
+      const col = el('div', 'trade-editor-side');
+      col.appendChild(el('div', 'trade-editor-title', `${names[side]} gibt`));
+      const slots = el('div', 'trade-slots');
+      containers[side] = slots;
+      col.appendChild(slots);
+      const add = el('button', 'trade-btn trade-add', '+ Karte');
+      add.type = 'button';
+      add.addEventListener('click', () => addSlot(side));
+      addButtons[side] = add;
+      col.appendChild(add);
+      wrap.appendChild(col);
+    }
+
+    // Vorbefüllen: Presets, sonst je Seite ein leerer Slot.
+    const presets = { from: fromPreset, to: toPreset };
+    for (const side of ['from', 'to']) {
+      if (presets[side].length) presets[side].forEach((id) => addSlot(side, id));
+      else addSlot(side);
+    }
+
+    return {
+      el: wrap,
+      getFrom: () => state.from.map((s) => s.select.value).filter(Boolean),
+      getTo: () => state.to.map((s) => s.select.value).filter(Boolean),
+    };
   }
 
-  _fillCardSelect(select, collection) {
+  /** Füllt ein Slot-Select mit besessenen Karten der Seite, ohne die ausgeschlossenen. */
+  _fillSideSelect(select, coll, excludeSet, current) {
     select.innerHTML = '';
     const o0 = el('option', null, '– Karte wählen –'); o0.value = '';
     select.appendChild(o0);
     for (const set of (this.sets || [])) {
-      const owned = set.cards.filter((c) => (collection[c.id] || 0) > 0);
+      const owned = set.cards.filter(
+        (c) => (coll[c.id] || 0) > 0 && (c.id === current || !excludeSet.has(c.id)),
+      );
       if (!owned.length) continue;
       const g = document.createElement('optgroup');
       g.label = set.name;
       for (const c of owned) {
-        const o = el('option', null, `${c.name} ×${collection[c.id]} (${c.rarity}/${c.finish})`);
+        const o = el('option', null, `${c.name} (${c.rarity}/${c.finish})`);
         o.value = c.id;
         g.appendChild(o);
       }
       select.appendChild(g);
     }
+    select.value = current || '';
+  }
+
+  _updateSlotPreview(slot) {
+    slot.preview.innerHTML = '';
+    if (slot.select.value) slot.preview.appendChild(this._cardChip(slot.select.value));
   }
 
   _cardChip(cardId) {

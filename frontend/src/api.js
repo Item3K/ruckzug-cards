@@ -61,13 +61,13 @@ export async function listTrades() {
 export async function getTrade(id) {
   return jsonOrThrow(await fetch(`/api/trades/${id}`));
 }
-/** Neuen Trade vorschlagen (A bietet offeredCard, fragt requestedCard von toUser). */
-export async function createTrade(toUser, offeredCard, requestedCard) {
-  return postJson('/api/trades', { to_user: toUser, offered_card: offeredCard, requested_card: requestedCard });
+/** Neuen Trade vorschlagen (fromCards = meine 1–5 Karten, toCards = 1–5 von toUser). */
+export async function createTrade(toUser, fromCards, toCards) {
+  return postJson('/api/trades', { to_user: toUser, from_cards: fromCards, to_cards: toCards });
 }
-/** Gegenvorschlag (Paar neu zusammenstellen). */
-export async function counterTrade(id, offeredCard, requestedCard) {
-  return postJson(`/api/trades/${id}/counter`, { offered_card: offeredCard, requested_card: requestedCard });
+/** Gegenvorschlag (beide Listen neu zusammenstellen). */
+export async function counterTrade(id, fromCards, toCards) {
+  return postJson(`/api/trades/${id}/counter`, { from_cards: fromCards, to_cards: toCards });
 }
 export async function acceptTrade(id) { return postJson(`/api/trades/${id}/accept`, {}); }
 export async function rejectTrade(id) { return postJson(`/api/trades/${id}/reject`, {}); }

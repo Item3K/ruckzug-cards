@@ -21,8 +21,30 @@ import db  # gemeinsamer Zugriffs-Layer (setzt WAL + busy_timeout + foreign_keys
 _SCHEMA_FILE = Path(__file__).resolve().parent / "schema.sql"
 
 
-def _migrate(conn) -> None:
-    """Additive, idempotente Migrationen für bereits bestehende cards.db.
+def _migrate_pre(conn) -> None:
+    """Strukturmigrationen, die VOR dem (Neu-)Anlegen der Tabellen laufen müssen.
+
+    Phase 9b: Trading wurde von 1:1 (Einzelspalten offered_card/requested_card)
+    auf Mehrkarten (trade_items) umgestellt. Erkennt man das alte Schema an der
+    Spalte trades.offered_card, werden die Trade-Tabellen verworfen, damit
+    executescript() sie frisch im neuen Schema anlegt. Es betrifft NUR Trade-
+    Tabellen (reine Test-Trades) — andere Tabellen bleiben unangetastet.
+    """
+    has_trades = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='trades'"
+    ).fetchone()
+    if not has_trades:
+        return
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(trades);").fetchall()}
+    if "offered_card" in cols:  # altes 1:1-Schema -> Trade-Tabellen neu aufbauen
+        conn.execute("DROP TABLE IF EXISTS trade_items;")
+        conn.execute("DROP TABLE IF EXISTS trade_history;")
+        conn.execute("DROP TABLE IF EXISTS trades;")
+        print("Migration: altes 1:1-Trade-Schema verworfen (Test-Trades entfernt).")
+
+
+def _migrate_post(conn) -> None:
+    """Additive, idempotente Spalten-Migrationen für bereits bestehende Tabellen.
 
     ``CREATE TABLE IF NOT EXISTS`` legt fehlende Tabellen an, ergänzt aber KEINE
     neuen Spalten in bereits existierenden Tabellen — das holen wir hier nach.
@@ -39,8 +61,9 @@ def init_db() -> None:
     with db.connection() as conn:
         # WAL wird bereits in db.connect() per PRAGMA gesetzt; hier nur bestätigen.
         mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
-        conn.executescript(schema_sql)
-        _migrate(conn)
+        _migrate_pre(conn)              # ggf. veraltete Tabellen verwerfen ...
+        conn.executescript(schema_sql)  # ... dann (neu) anlegen
+        _migrate_post(conn)
 
     print(f"cards.db initialisiert unter: {db.get_db_path()}")
     print(f"journal_mode = {mode}")

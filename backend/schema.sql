@@ -131,10 +131,11 @@ CREATE TABLE IF NOT EXISTS app_users (
 );
 
 -- =====================================================================
--- trades — 1:1-Kartentausch zwischen zwei Usern (Phase 9b, Website)
---   from_user (A) bietet offered_card; to_user (B) gibt requested_card.
---   Diese Rollen sind über den ganzen Trade FEST. Gegenvorschläge ändern nur
---   die beiden Karten + wer am Zug ist (turn_user), nicht die Rollen.
+-- trades — Mehrkarten-Tausch zwischen zwei Usern (Phase 9b, Website)
+--   from_user (A) bietet 1–5 Karten; to_user (B) gibt 1–5 Karten. Die konkreten
+--   Karten stehen in trade_items (eine Zeile je Karte+Seite), NICHT mehr als
+--   Einzelspalten. Rollen A/B sind über den ganzen Trade FEST; Gegenvorschläge
+--   ändern nur die Karten-Listen + wer am Zug ist (turn_user).
 --   status: open | accepted | rejected | cancelled.
 --   turn_user = wer als Nächstes annehmen/ablehnen/kontern darf (NULL wenn beendet).
 --   Die Tausch-Logik liegt in backend/trade_logic.py (auch vom Bot nutzbar).
@@ -143,30 +144,43 @@ CREATE TABLE IF NOT EXISTS trades (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     from_user       TEXT    NOT NULL,                 -- A (Ersteller)
     to_user         TEXT    NOT NULL,                 -- B (Empfänger)
-    offered_card    TEXT    NOT NULL,                 -- Karte, die A gibt
-    requested_card  TEXT    NOT NULL,                 -- Karte, die B gibt
     status          TEXT    NOT NULL DEFAULT 'open',  -- open|accepted|rejected|cancelled
     turn_user       TEXT,                             -- wer ist am Zug (NULL = beendet)
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (offered_card)   REFERENCES card_defs (card_id) ON DELETE CASCADE,
-    FOREIGN KEY (requested_card) REFERENCES card_defs (card_id) ON DELETE CASCADE
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_trades_from   ON trades (from_user);
 CREATE INDEX IF NOT EXISTS idx_trades_to     ON trades (to_user);
 CREATE INDEX IF NOT EXISTS idx_trades_status ON trades (status);
 
 -- =====================================================================
+-- trade_items — die Karten eines Trades, je Seite (Verknüpfungstabelle)
+--   side = 'from' (A bietet) | 'to' (B gibt). Der PK (trade_id, side, card_id)
+--   verhindert seiteninterne Duplikate bereits auf DB-Ebene. Reihenfolge der
+--   Slots = Einfügereihenfolge (rowid).
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS trade_items (
+    trade_id  INTEGER NOT NULL,
+    side      TEXT    NOT NULL,                       -- 'from' | 'to'
+    card_id   TEXT    NOT NULL,
+    PRIMARY KEY (trade_id, side, card_id),
+    FOREIGN KEY (trade_id) REFERENCES trades (id)      ON DELETE CASCADE,
+    FOREIGN KEY (card_id)  REFERENCES card_defs (card_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_tradeitems_trade ON trade_items (trade_id);
+
+-- =====================================================================
 -- trade_history — Verlauf eines Trades (Erstellung + jeder Gegenvorschlag etc.)
---   Für die Verhandlungs-Anzeige; ein Eintrag je Aktion.
+--   Für die Verhandlungs-Anzeige; ein Eintrag je Aktion. Die Karten-Listen
+--   werden als JSON-Array (card_ids) je Seite als Schnappschuss gespeichert.
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS trade_history (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     trade_id        INTEGER NOT NULL,
     actor           TEXT    NOT NULL,                 -- wer die Aktion ausgelöst hat
     action          TEXT    NOT NULL,                 -- create|counter|accept|reject|cancel
-    offered_card    TEXT,                             -- Stand nach der Aktion (A-Seite)
-    requested_card  TEXT,                             -- Stand nach der Aktion (B-Seite)
+    from_cards      TEXT,                             -- JSON-Array card_ids (A-Seite, nach Aktion)
+    to_cards        TEXT,                             -- JSON-Array card_ids (B-Seite, nach Aktion)
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (trade_id) REFERENCES trades (id) ON DELETE CASCADE
 );

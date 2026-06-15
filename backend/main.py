@@ -264,13 +264,13 @@ def _trade_call(fn, *args):
 
 class CreateTradeRequest(BaseModel):
     to_user: str
-    offered_card: str
-    requested_card: str
+    from_cards: list[str]   # 1–5 Karten, die ich (A) gebe
+    to_cards: list[str]     # 1–5 Karten, die der Partner (B) gibt
 
 
 class CounterTradeRequest(BaseModel):
-    offered_card: str
-    requested_card: str
+    from_cards: list[str]
+    to_cards: list[str]
 
 
 @app.get("/api/trades")
@@ -299,14 +299,14 @@ def trade_detail(trade_id: int, request: Request) -> dict:
 def trade_create(req: CreateTradeRequest, request: Request) -> dict:
     me_id = require_user(request)
     return _trade_call(trade_logic.create_trade, me_id, req.to_user,
-                       req.offered_card, req.requested_card)
+                       req.from_cards, req.to_cards)
 
 
 @app.post("/api/trades/{trade_id}/counter")
 def trade_counter(trade_id: int, req: CounterTradeRequest, request: Request) -> dict:
     me_id = require_user(request)
     return _trade_call(trade_logic.counter_trade, trade_id, me_id,
-                       req.offered_card, req.requested_card)
+                       req.from_cards, req.to_cards)
 
 
 @app.post("/api/trades/{trade_id}/accept")

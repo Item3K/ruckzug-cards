@@ -806,14 +806,48 @@ canvas {
 .trade-status.status-rejected,
 .trade-status.status-cancelled { background: rgba(127, 29, 29, 0.25); color: #fca5a5; }
 
-/* Tausch-Paar */
-.trade-pair { display: flex; align-items: center; gap: 8px; }
+/* Tausch-Listen */
+.trade-pair { display: flex; align-items: flex-start; gap: 8px; }
 .trade-side { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .trade-side-name {
   font-size: 12px; color: #94a3b8;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.trade-swap { flex: 0 0 auto; font-size: 20px; color: #64748b; }
+.trade-side-cards { display: flex; flex-direction: column; gap: 6px; }
+.trade-swap { flex: 0 0 auto; font-size: 20px; color: #64748b; align-self: center; }
+
+/* Mehr-Slot-Editor */
+.trade-editor { display: flex; gap: 12px; flex-wrap: wrap; }
+.trade-editor-side {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.35);
+}
+.trade-editor-title { font-size: 13px; font-weight: 700; color: #cbd5e1; }
+.trade-slots { display: flex; flex-direction: column; gap: 8px; }
+.trade-slot { display: flex; align-items: center; gap: 6px; }
+.trade-slot .trade-select { flex: 1 1 auto; min-width: 0; }
+.trade-slot .trade-chip-wrap { flex: 0 0 auto; }
+.trade-slot-rm {
+  flex: 0 0 auto;
+  width: 32px;
+  min-height: 36px;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.18);
+  color: #fca5a5;
+  font-size: 13px;
+  cursor: pointer;
+}
+.trade-slot-rm:hover { border-color: #b91c1c; background: rgba(127, 29, 29, 0.32); }
+.trade-add { align-self: flex-start; }
+.trade-add:disabled { opacity: 0.5; cursor: default; }
 
 /* Karten-Chip (Vorschaubild + Name) */
 .trade-chip { display: flex; align-items: center; gap: 8px; min-width: 0; }
