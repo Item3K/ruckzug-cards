@@ -181,8 +181,7 @@ export class Admin {
     amount.setAttribute('aria-label', 'Sanduhren-Betrag');
     const setBtn = el('button', 'admin-btn', 'Setzen');
     const addBtn = el('button', 'admin-btn', 'Addieren ±');
-    const apply = async (mode) => {
-      const val = parseInt(amount.value, 10);
+    const applyHg = async (mode, val) => {
       if (Number.isNaN(val)) { this._flash(card, 'Bitte eine Zahl eingeben.', true); return; }
       this._busy(card, true);
       try {
@@ -194,10 +193,16 @@ export class Admin {
       } catch (e) { this._flash(card, e.message || String(e), true); }
       finally { this._busy(card, false); }
     };
-    setBtn.addEventListener('click', () => apply('set'));
-    addBtn.addEventListener('click', () => apply('add'));
+    setBtn.addEventListener('click', () => applyHg('set', parseInt(amount.value, 10)));
+    addBtn.addEventListener('click', () => applyHg('add', parseInt(amount.value, 10)));
     hgRow.append(el('span', 'admin-label', 'Sanduhren'), amount, setBtn, addBtn);
     card.appendChild(hgRow);
+
+    // Schnell-Buttons: feste +/- Mengen sofort (mode 'add', Backend floort bei 0).
+    const hgQuick = el('div', 'admin-row');
+    hgQuick.append(el('span', 'admin-label', 'Schnell'),
+      this._quickButtons((d) => applyHg('add', d)));
+    card.appendChild(hgQuick);
 
     // Karten verwalten -> öffnet die Karten-Verwaltung für diesen User.
     const manage = el('button', 'admin-btn admin-btn-primary', 'Karten verwalten →');
@@ -297,8 +302,7 @@ export class Admin {
 
     const give = el('button', 'admin-btn', 'Geben');
     const take = el('button', 'admin-btn admin-btn-warn', 'Nehmen');
-    const act = async (fn) => {
-      const n = parseInt(qty.value, 10);
+    const act = async (fn, n) => {
       if (Number.isNaN(n) || n < 1) { this._cardFlash(row, 'Anzahl ≥ 1.', true); return; }
       this._busyRow(row, true);
       try {
@@ -310,9 +314,11 @@ export class Admin {
       } catch (e) { this._cardFlash(row, e.message || String(e), true); }
       finally { this._busyRow(row, false); }
     };
-    give.addEventListener('click', () => act(adminGiveCard));
-    take.addEventListener('click', () => act(adminTakeCard));
-    row.append(give, take);
+    give.addEventListener('click', () => act(adminGiveCard, parseInt(qty.value, 10)));
+    take.addEventListener('click', () => act(adminTakeCard, parseInt(qty.value, 10)));
+    // Schnell-Buttons: +/- feste Mengen sofort (geben/nehmen, Nehmen floort bei 0).
+    const quick = this._quickButtons((d) => act(d > 0 ? adminGiveCard : adminTakeCard, Math.abs(d)));
+    row.append(give, take, quick);
 
     const fb = el('div', 'admin-card-fb');
     row.appendChild(fb);
@@ -343,6 +349,18 @@ export class Admin {
   }
 
   // --- Helfer ---------------------------------------------------------------
+  /** Kompakte +1/+10/-1/-10-Buttons; ruft cb(delta) (delta vorzeichenbehaftet). */
+  _quickButtons(cb) {
+    const box = el('div', 'admin-quick');
+    for (const d of [1, 10, -1, -10]) {
+      const b = el('button', 'admin-qbtn' + (d < 0 ? ' admin-qbtn-warn' : ''),
+        (d > 0 ? '+' : '') + d);
+      b.addEventListener('click', () => cb(d));
+      box.appendChild(b);
+    }
+    return box;
+  }
+
   _busy(card, b) {
     card.querySelectorAll('button, input').forEach((n) => { n.disabled = b; });
   }

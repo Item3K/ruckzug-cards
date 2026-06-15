@@ -568,6 +568,26 @@ canvas {
 .admin-btn-warn { border-color: #7f1d1d; color: #fca5a5; }
 .admin-btn-warn:hover { border-color: #b91c1c; background: rgba(127, 29, 29, 0.25); }
 
+/* Kompakte Schnell-Buttons (+1/+10/-1/-10). */
+.admin-quick { display: flex; gap: 4px; flex-wrap: wrap; }
+.admin-qbtn {
+  min-width: 40px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.admin-qbtn:hover { border-color: #64748b; }
+.admin-qbtn:disabled { opacity: 0.5; cursor: default; }
+.admin-qbtn-warn { border-color: #7f1d1d; color: #fca5a5; }
+.admin-qbtn-warn:hover { border-color: #b91c1c; background: rgba(127, 29, 29, 0.25); }
+
 .admin-feedback { font-size: 13px; min-height: 1.1em; }
 
 /* --- Einstellungen: Tuning-Toggle --- */
