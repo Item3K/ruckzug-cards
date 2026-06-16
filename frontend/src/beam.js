@@ -13,6 +13,29 @@ const BEAM_TEX = {
   jackpot: '/textures/beam_gold_4k.png',
 };
 
+// Beam-Texturen MODULWEIT teilen (nicht pro Beam-Instanz neu laden) — sonst würden
+// beim x10 bis zu 10 große 4K-Texturen pro Durchlauf erneut geladen (Lag/verzögerte
+// Beams). Eine geteilte Textur pro Stufe, gecached.
+const _beamLoader = new THREE.TextureLoader();
+const _beamTexCache = {};
+
+function loadBeamTexture(stage) {
+  if (!_beamTexCache[stage]) {
+    const tex = _beamLoader.load(BEAM_TEX[stage]);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    _beamTexCache[stage] = tex;
+  }
+  return _beamTexCache[stage];
+}
+
+/** Beam-Texturen vorab laden + (falls renderer da) auf die GPU hochladen. */
+export function preloadBeamTextures(renderer) {
+  for (const stage of Object.keys(BEAM_TEX)) {
+    const tex = loadBeamTexture(stage);
+    if (renderer) renderer.initTexture(tex);
+  }
+}
+
 // Pro Stufe: Spitzen-Deckkraft und Skalierungs-Faktor (jackpot kräftiger).
 const STAGE_PARAMS = {
   normal: { peak: 0.0, scale: 1.0 }, // kaum/kein Beam
@@ -28,8 +51,6 @@ export class Beam {
     this.camera = camera;
     this.mesh = null;
     this.material = null;
-    this._textures = {};
-    this._loader = new THREE.TextureLoader();
     this.t = 0;
     this.active = false;
     this.stage = 'normal';
@@ -38,12 +59,7 @@ export class Beam {
   }
 
   _getTexture(stage) {
-    if (!this._textures[stage]) {
-      const tex = this._loader.load(BEAM_TEX[stage]);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      this._textures[stage] = tex;
-    }
-    return this._textures[stage];
+    return loadBeamTexture(stage); // geteilte, gecachte Textur
   }
 
   /**

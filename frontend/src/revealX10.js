@@ -22,7 +22,7 @@ import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { Beam } from './beam.js';
+import { Beam, preloadBeamTextures } from './beam.js';
 import { openPackX10 } from './api.js';
 import { resolveSetAsset } from './setLoader.js';
 import { easeInOutCubic } from './tween.js';
@@ -53,15 +53,18 @@ const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
 export class RevealX10 {
-  constructor({ scene, camera, cardStack, tweens, ui, onComplete }) {
+  constructor({ scene, camera, renderer, cardStack, tweens, ui, onComplete }) {
     this.scene = scene;
     this.camera = camera;
+    this.renderer = renderer || null;
     this.cardStack = cardStack;
     this.tweens = tweens;
     this.ui = ui;
     this.onComplete = onComplete; // () => void: Auto-Rückkehr zur Landing
 
     this.active = false;
+    this._armed = false;         // wartet auf Doppeltipp zum Sequenzstart
+    this._gen = 0;               // Generations-Token: invalidiert alte async-Durchläufe
     this.result = null;
     this.packsData = null;
     this.instances = null;       // [{ holder, obj, mixer, action, playing, _onFinish }]
@@ -86,12 +89,20 @@ export class RevealX10 {
     for (const b of this._beams) b.update(delta);
   }
 
-  async start(packId, ripUrl) {
+  /**
+   * Zeigt den geschlossenen, gestaffelten Stapel (schräge Aufsicht) und lädt alles vor.
+   * Die Aufreiß-Sequenz startet ERST per beginSequence() (Doppeltipp), analog zum
+   * Einzel-Opening. Ein Generations-Token (gen) stellt sicher, dass ein abgebrochener
+   * Durchlauf nicht später noch auf bereits aufgeräumte Objekte zugreift.
+   */
+  async present(packId, ripUrl) {
     if (this.active) return;
     this.active = true;
+    this._armed = false;
+    const gen = ++this._gen;
     this.ui.setMode('opening');
-    this.ui.setStatus('Lädt …');
-    this.ui.setHint('');
+    this.ui.setStatus('');
+    this.ui.setHint('Lädt …');
 
     const resultP = openPackX10(packId);
     resultP.catch(() => {});
@@ -99,25 +110,46 @@ export class RevealX10 {
     try {
       await this._ensureBase(ripUrl);
     } catch (e) {
-      this._fail(e);
+      if (gen === this._gen) this._fail(e);
       return;
     }
-    if (!this.active) return;
+    if (gen !== this._gen) return; // zwischenzeitlich abgebrochen/neu gestartet
+
+    preloadBeamTextures(this.renderer); // Beam-4K-Texturen vorab (sonst verzögerte Beams)
     this._buildStack();
-    this._snapCamera(this._poseOverPack(0)); // Start: Aufsicht auf das vorderste Pack
+    this._snapCamera(this._poseOverPack(0)); // schräge Aufsicht auf das vorderste Pack
+    this._prewarm();                          // Shader/Texturen kompilieren -> kein Ruckler
 
     let result;
     try {
       result = await resultP;
     } catch (e) {
-      this._fail(e);
+      if (gen === this._gen) this._fail(e);
       return;
     }
-    if (!this.active) return;
+    if (gen !== this._gen) return;
     this.result = result;
     this.packsData = result.packs;
 
+    // Bereit: auf Doppeltipp warten (kein Drehen im x10 — nur ansehen + Start).
+    this._armed = true;
+    this.ui.setMode('select');
+    this.ui.setStatus('');
+    this.ui.setHint('Doppeltippen zum Öffnen');
+  }
+
+  /** Startet die Aufreiß-/Karten-Sequenz (vom Doppeltipp ausgelöst). */
+  beginSequence() {
+    if (!this.active || !this._armed) return;
+    this._armed = false;
+    this.ui.setHint('');
     this._run().catch((e) => { console.error('x10:', e); this._fail(e); });
+  }
+
+  /** Shader/Texturen der Pack-Reihe vorab kompilieren (gegen den ersten Ruckler). */
+  _prewarm() {
+    if (!this.renderer) return;
+    try { this.renderer.compile(this.scene, this.camera); } catch { /* egal */ }
   }
 
   async _run() {
@@ -398,6 +430,8 @@ export class RevealX10 {
   }
 
   reset() {
+    this._gen++;       // laufende async-Durchläufe (present/_run) entwerten
+    this._armed = false;
     if (this._returnTimer) { clearTimeout(this._returnTimer); this._returnTimer = null; }
     if (this._waitTimer) { clearTimeout(this._waitTimer); this._waitTimer = null; }
     this.active = false;
@@ -420,7 +454,10 @@ export class RevealX10 {
     if (this.stackGroup) {
       this.scene.remove(this.stackGroup);
       for (const inst of (this.instances || [])) {
-        if (inst.mixer) inst.mixer.stopAllAction();
+        if (inst.mixer) {
+          inst.mixer.stopAllAction();
+          inst.mixer.uncacheRoot(inst.obj); // Mixer-interne Caches freigeben (kein Leck über Runs)
+        }
         inst.holder.traverse((node) => {
           if (!node.isMesh) return;
           const mats = Array.isArray(node.material) ? node.material : [node.material];

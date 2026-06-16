@@ -42,6 +42,7 @@ onFrame((delta) => {
 
 let currentPack = null;
 let revealX10 = null;     // x10-Orchestrator (nach ui erstellt)
+let x10Mode = false;      // true, solange der x10-Modus die Opening-View besitzt
 let loggedIn = false;     // Login-Status (von der Landing via onAuthChange)
 let isAdmin = false;      // Admin-Status (von der Landing via onAuthChange)
 let activeView = 'landing';
@@ -68,17 +69,16 @@ const reveal = new RevealSequence({
 });
 
 // x10-Modus (10 Packs auf einmal) — teilt sich cardStack/ui mit dem Einzel-Opening;
-// eigene Beam-Instanzen für mehrere gleichzeitige Beams im Auftakt.
+// eigene Beam-Instanzen für mehrere gleichzeitige Beams. renderer für Prewarm/Preload.
 revealX10 = new RevealX10({
-  scene, camera, cardStack, tweens, ui,
+  scene, camera, renderer, cardStack, tweens, ui,
   onComplete: () => enterLanding(),
 });
 
 // Doppelklick / Doppel-Tap auf das Pack (Opening-Canvas) startet das Öffnen.
 // Einzelklick/Drag dreht weiter (DragRotator); ein Drag zählt nicht als Tap.
-// Die Seite (vorne/hinten) bestimmt reveal.start im Moment des Doppel-Taps.
 attachDoubleTap(renderer.domElement, () => {
-  if (revealX10 && revealX10.active) return; // im x10-Modus kein Einzel-Öffnen
+  if (x10Mode) { revealX10.beginSequence(); return; } // x10: Doppeltipp startet die Sequenz (beginSequence prüft 'armed')
   if (currentPack) reveal.start(currentPack.backendPackId);
 });
 
@@ -150,6 +150,7 @@ async function applyTuningPanels(enabled) {
 function enterOpening(pack) {
   // Login erforderlich, bevor man ein Pack öffnet (ROADMAP §8).
   if (!loggedIn) { landing.promptLogin(); return; }
+  x10Mode = false;
   landing.setActive(false);
   opening.setActive(true);
   ui.setVisible(true);
@@ -160,6 +161,7 @@ function enterOpening(pack) {
 // x10-Modus starten (10 Packs desselben Typs auf einmal).
 function enterOpeningX10(pack) {
   if (!loggedIn) { landing.promptLogin(); return; }
+  x10Mode = true;
   reveal.reset();        // evtl. Einzel-Opening-Reste sauber
   revealX10.reset();
   viewer.dispose();      // kein Einzel-Pack im Bild
@@ -168,10 +170,11 @@ function enterOpeningX10(pack) {
   opening.setActive(true);
   ui.setVisible(true);
   showPanels('opening');
-  revealX10.start(pack.backendPackId, pack.file);
+  revealX10.present(pack.backendPackId, pack.file); // zeigt Stapel; Sequenz per Doppeltipp
 }
 
 function enterLanding() {
+  x10Mode = false;
   reveal.reset();
   if (revealX10) revealX10.reset();
   opening.setActive(false);
