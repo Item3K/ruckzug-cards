@@ -6,7 +6,11 @@
 // selten = weißer Beam, jackpot = goldener Beam (heller, größer).
 
 import * as THREE from 'three';
-import { BEAM_INTENSITY, BEAM_SCALE } from './config.js';
+import { BEAM_INTENSITY, BEAM_SCALE, BEAM_DURATION } from './config.js';
+
+// Fallback-Seitenverhältnis (Breite/Höhe) der Beam-PNGs (3072×4096), falls die Textur
+// beim ersten Anzeigen noch nicht geladen ist (sonst wird es aus tex.image gelesen).
+const BEAM_TEX_ASPECT = 3072 / 4096;
 
 const BEAM_TEX = {
   selten: '/textures/beam_weiss_4k.png',
@@ -23,6 +27,9 @@ function loadBeamTexture(stage) {
   if (!_beamTexCache[stage]) {
     const tex = _beamLoader.load(BEAM_TEX[stage]);
     tex.colorSpace = THREE.SRGBColorSpace;
+    // Ränder NICHT kacheln/spiegeln -> an den Kanten sauberer (transparenter) Auslauf.
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
     _beamTexCache[stage] = tex;
   }
   return _beamTexCache[stage];
@@ -42,8 +49,6 @@ const STAGE_PARAMS = {
   selten: { peak: 0.85, scale: 1.0 },
   jackpot: { peak: 1.0, scale: 1.25 },
 };
-
-const DURATION = 1.4; // Sekunden gesamtes Auf-/Abblenden
 
 export class Beam {
   constructor(scene, camera) {
@@ -81,7 +86,11 @@ export class Beam {
     // BEAM_SCALE/BEAM_INTENSITY live aus der Config (Dev-Panel) übernehmen.
     this._peak = this._params.peak * BEAM_INTENSITY;
     const height = packHeight * 2.2 * this._params.scale * BEAM_SCALE;
-    const width = height * 0.5;
+    // Plane an das SEITENVERHÄLTNIS der Textur koppeln (sonst horizontales Quetschen ->
+    // seitlicher Auslauf wirkt hart abgeschnitten). Aspekt aus der geladenen Textur lesen.
+    const tex = this._getTexture(stage);
+    const aspect = (tex.image && tex.image.width) ? tex.image.width / tex.image.height : BEAM_TEX_ASPECT;
+    const width = height * aspect;
     const geo = new THREE.PlaneGeometry(width, height);
     // Pivot an die Spitze legen: Geometrie so verschieben, dass die untere
     // Kante (Spitze des Kegel-PNG) im Ursprung des Mesh sitzt -> Spitze bleibt
@@ -89,7 +98,7 @@ export class Beam {
     geo.translate(0, height / 2, 0);
 
     this.material = new THREE.MeshBasicMaterial({
-      map: this._getTexture(stage),
+      map: tex,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,   // §6
@@ -114,15 +123,17 @@ export class Beam {
   update(delta) {
     if (!this.active || !this.mesh) return;
     this.t += delta;
-    const p = Math.min(this.t / DURATION, 1);
+    const p = Math.min(this.t / BEAM_DURATION, 1);
 
     // Billboard: immer zur Kamera ausrichten (Spitze bleibt durch Pivot am Riss).
     this.mesh.quaternion.copy(this.camera.quaternion);
 
-    // Opacity: schnell auf (Riss-Moment), dann langsam ab.
+    // Schnelles Aufblenden (feste kurze Zeit), danach LANGES Ausfaden über den Rest von
+    // BEAM_DURATION -> sanfteres, längeres Auslaufen (justierbar via BEAM_DURATION).
+    const RISE = 0.22;
     let opacity;
-    if (p < 0.2) opacity = (p / 0.2) * this._peak;
-    else opacity = this._peak * (1 - (p - 0.2) / 0.8);
+    if (this.t < RISE) opacity = (this.t / RISE) * this._peak;
+    else opacity = this._peak * (1 - (this.t - RISE) / Math.max(0.001, BEAM_DURATION - RISE));
     this.material.opacity = Math.max(0, opacity);
 
     // Skalierung: von klein auf groß wachsen lassen.

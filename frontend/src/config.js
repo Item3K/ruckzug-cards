@@ -39,6 +39,7 @@ export let BEAM_RIP_HEIGHT_FACTOR = -0.46;   // Höhe der Beam-Spitze (× Pack-H
 export let BEAM_RIP_X_FACTOR = -0.03;        // horizontaler Versatz (× Pack-Höhe), negativ = links
 export let BEAM_INTENSITY = 1.0;             // Multiplikator auf die Beam-Spitzen-Deckkraft
 export let BEAM_SCALE = 1.0;                 // Multiplikator auf die Beam-Größe
+export let BEAM_DURATION = 2.6;              // Sekunden gesamtes Auf-/Abblenden (größer = längeres, sanfteres Ausfaden)
 
 // --- Stapel-Optik -----------------------------------------------------------
 export let CARD_STACK_DEPTH = 0.04;          // Tiefen-Versatz pro Karte (× Kartenhöhe)
@@ -85,7 +86,7 @@ export const TUNING_DEFAULTS = Object.freeze({
   STACK_MAX_ANGLE_DEG, STACK_DRAG_SENSITIVITY, STACK_SPRING_STIFFNESS,
   STACK_SPRING_DAMPING, FLIP_DURATION, FLIP_FORWARD,
   PACK_SPIN_FRICTION, PACK_DRAG_SENSITIVITY, PACK_SPIN_MAX_SPEED,
-  BEAM_RIP_HEIGHT_FACTOR, BEAM_RIP_X_FACTOR, BEAM_INTENSITY, BEAM_SCALE,
+  BEAM_RIP_HEIGHT_FACTOR, BEAM_RIP_X_FACTOR, BEAM_INTENSITY, BEAM_SCALE, BEAM_DURATION,
   CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
@@ -117,6 +118,7 @@ const _setters = {
   BEAM_RIP_X_FACTOR: (v) => { BEAM_RIP_X_FACTOR = v; },
   BEAM_INTENSITY: (v) => { BEAM_INTENSITY = v; },
   BEAM_SCALE: (v) => { BEAM_SCALE = v; },
+  BEAM_DURATION: (v) => { BEAM_DURATION = v; },
   CARD_STACK_DEPTH: (v) => { CARD_STACK_DEPTH = v; },
   ARROW_SIZE_FACTOR: (v) => { ARROW_SIZE_FACTOR = v; },
   ARROW_GAP_FACTOR: (v) => { ARROW_GAP_FACTOR = v; },

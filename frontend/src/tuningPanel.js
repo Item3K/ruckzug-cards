@@ -32,6 +32,7 @@ const GROUPS = {
     ['BEAM_RIP_X_FACTOR', -0.4, 0.4, 0.01, 'X-Versatz'],
     ['BEAM_INTENSITY', 0, 3, 0.05, 'Intensität'],
     ['BEAM_SCALE', 0.3, 3, 0.05, 'Skalierung'],
+    ['BEAM_DURATION', 0.6, 5, 0.1, 'Ausblend-Dauer'],
   ],
   'Card-Stack': [
     ['CARD_STACK_DEPTH', 0, 0.2, 0.005, 'Tiefen-Versatz'],
