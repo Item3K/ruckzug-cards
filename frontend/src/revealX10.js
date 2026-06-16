@@ -121,13 +121,19 @@ export class RevealX10 {
   async _run() {
     for (let i = 0; i < this.instances.length; i++) {
       if (!this.active) return;
+      this._setStackVisible(i);    // nur Pack i..9 sichtbar (i vorne), bereits durch < i aus
       await this._ripFront(i);     // vorderstes Pack reißt auf (+ Beam), kurz halten
       if (!this.active) return;
-      await this._revealCards(i);  // Kamera frontal + Pack ausblenden + Karten durchgehen
+      await this._revealCards(i);  // Kamera frontal; restl. Stapel AUS; nur Karten
       if (!this.active) return;
-      if (i < this.instances.length - 1) await this._advanceToNext(); // Kamera zurück + Stapel vor
+      if (i < this.instances.length - 1) await this._advanceToNext(i); // Kamera zurück + Stapel vor
     }
     this._finish();
+  }
+
+  /** Sichtbarkeit der Pack-Reihe: ab Index `from` sichtbar, davor (verbraucht) aus. */
+  _setStackVisible(from) {
+    this.instances.forEach((inst, j) => { inst.holder.visible = j >= from; });
   }
 
   /** Das vorderste Pack (Index i) reißt auf; Beam nur, wenn es etwas Besonderes hat. */
@@ -162,6 +168,9 @@ export class RevealX10 {
     this.cardStack.onProgress = (r, t) =>
       this.ui.setStatus(`Pack ${i + 1}/${total} · Karte ${Math.min(r + 1, t)}/${t}`);
 
+    // Restlichen Stapel sofort ausblenden -> es hängt KEIN weiteres Pack neben den Karten.
+    this.instances.forEach((other, j) => { if (j !== i) other.holder.visible = false; });
+
     // Kamera in die Frontalsicht (für die Karten) + offenes Pack ausblenden (parallel).
     this._tweenCamera(this._frontalPose(), X10_CAM_MOVE);
     this.tweens.add({
@@ -188,8 +197,10 @@ export class RevealX10 {
     this.cardStack.dispose();
   }
 
-  /** Kamera zurück in die Aufsicht und den Stapel ein Pack nach vorne rücken. */
-  async _advanceToNext() {
+  /** Kamera zurück in die Aufsicht, kommende (geschlossene) Packs zeigen, Stapel vorrücken. */
+  async _advanceToNext(i) {
+    // Pack i ist verbraucht (bleibt aus); die folgenden wieder einblenden.
+    this.instances.forEach((inst, j) => { inst.holder.visible = j > i; });
     await Promise.all([
       this._tweenCamera(this._angledPose(), X10_CAM_MOVE),
       this._advanceStack(),
