@@ -46,7 +46,18 @@ import {
 } from './config.js';
 
 const X10_COUNT = 10;
-const LINEAR = (t) => t; // lineares Easing (konstante Geschwindigkeit) für den Überflug
+
+// Überflug-Easing: konstante Geschwindigkeit (linear) für den Großteil der Fahrt, am
+// Ende aber WEICH auslaufend (kein harter Stopp). Linear bis k, danach quadratischer
+// Auslauf; die Steigung im linearen Teil ist knapp > 1, damit der Auslauf die Reststrecke
+// noch schafft (kein erneutes Beschleunigen, nur Abbremsen ganz am Schluss).
+function flyoverEase(t) {
+  const k = 0.82;
+  const m = 2 / (k + 1);
+  if (t < k) return m * t;
+  const r = 1 - t;
+  return 1 - (m / (2 * (1 - k))) * r * r;
+}
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('/draco/');
@@ -189,22 +200,36 @@ export class RevealX10 {
         });
       }
     }
-    // Kamera-Überflug vom vordersten zum hintersten Pack — LINEAR (gleichmäßig).
-    const flyover = this._tweenCamera(this._poseOverPack(this.instances.length - 1), X10_FLYOVER, gen, LINEAR);
+    // Kamera-Überflug vom vordersten zum hintersten Pack — gleichmäßig, am Ende weich.
+    const flyover = this._tweenCamera(this._poseOverPack(this.instances.length - 1), X10_FLYOVER, gen, flyoverEase);
     await Promise.all([...ripPromises, flyover]);
     await this._wait(X10_HOLD_AFTER_RIP); // kurz alle offenen Packs zeigen
   }
 
-  /** Übergang Phase 1 -> Phase 2: Kamera frontal + den (offenen) Stapel ausblenden. */
+  /** Übergang Phase 1 -> Phase 2: Kamera frontal + ALLE Packs sauber ausblenden. */
   async _toCardsView(gen) {
-    const insts = this.instances;
+    const insts = this.instances || [];
     const camP = this._tweenCamera(this._frontalPose(), X10_CAM_MOVE, gen);
-    this.tweens.add({
-      duration: PACK_FADE_DURATION,
-      onUpdate: (p) => { if (gen === this._gen) for (const inst of insts) this._setInstOpacity(inst, 1 - p); },
-      onComplete: () => { if (gen === this._gen && this.stackGroup) this.stackGroup.visible = false; },
+    // Den GESAMTEN (offenen) Stapel ausfaden — inkl. dem zuletzt aufgerissenen Pack.
+    await new Promise((resolve) => {
+      this.tweens.add({
+        duration: PACK_FADE_DURATION,
+        onUpdate: (p) => { if (gen === this._gen) for (const inst of insts) this._setInstOpacity(inst, 1 - p); },
+        onComplete: resolve,
+      });
     });
+    if (gen !== this._gen) return;
+    // Hart sicherstellen, dass NICHTS hängen bleibt: jedes Pack unsichtbar, Gruppe weg,
+    // und etwaige (spät erschienene) Beams entsorgen.
+    for (const inst of insts) inst.holder.visible = false;
+    if (this.stackGroup) this.stackGroup.visible = false;
+    this._disposeBeams();
     await camP;
+  }
+
+  _disposeBeams() {
+    for (const b of this._beams) b.dispose();
+    this._beams = [];
   }
 
   // === PHASE 2: Karten durchgehen ===========================================
@@ -450,8 +475,7 @@ export class RevealX10 {
     this.ui.showSkip(false);
     this.cardStack.disableInput();
     this.cardStack.dispose();
-    for (const b of this._beams) b.dispose();
-    this._beams = [];
+    this._disposeBeams();
     this._disposeStack();
     this._snapCamera(this._frontalPose()); // Kamera für Einzel-Opening wieder frontal
     this.result = null;
