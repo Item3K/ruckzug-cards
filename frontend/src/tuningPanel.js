@@ -51,6 +51,9 @@ const GROUPS = {
     ['TAP_VS_DRAG_THRESHOLD', 2, 40, 1, 'Tap/Drag-Schwelle'],
   ],
   x10: [
+    ['X10_STACK_DEPTH', 0.2, 2.5, 0.05, 'Stapel-Tiefe'],
+    ['X10_STACK_RISE', 0, 0.6, 0.01, 'Stapel-Hochversatz'],
+    ['X10_ADVANCE', 0.1, 1.2, 0.05, 'Vorrück-Tempo'],
     ['X10_RIP_STAGGER', 0, 0.3, 0.01, 'Aufreiß-Welle'],
     ['X10_HOLD_AFTER_RIP', 0, 2.5, 0.1, 'Halt nach Aufreißen'],
   ],

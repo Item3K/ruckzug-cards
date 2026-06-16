@@ -60,7 +60,10 @@ export let CARD_VIEW_HEIGHT = 2.4;           // Zielhöhe einer Karte in Weltuni
 export let PACK_OPEN_TIMESCALE = 1.15;       // Abspieltempo der Aufreiß-Animation (>1 = kürzer)
 export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 
-// --- x10-Öffnen (10 Packs in einer Reihe, Durchfliegen) ---------------------
+// --- x10-Öffnen (Stapel in die Tiefe, gemeinsamer Auftakt, dann Karten) ------
+export let X10_STACK_DEPTH = 0.8;            // Tiefen-Versatz pro Pack im Stapel (Weltunits, nach hinten)
+export let X10_STACK_RISE = 0.14;            // Hoch-Versatz pro Pack (Weltunits) -> Kanten der hinteren Packs sichtbar
+export let X10_ADVANCE = 0.45;               // Dauer, bis der Stapel ein Pack nach vorne rückt (s)
 export let X10_RIP_STAGGER = 0.09;           // Versatz zwischen den 10 (fast) gleichzeitigen Aufreiß-Starts (s) -> Welle/Domino
 export let X10_HOLD_AFTER_RIP = 0.9;         // Pause nach dem gemeinsamen Aufreißen, bevor die Karten kommen (s)
 
@@ -81,7 +84,7 @@ export const TUNING_DEFAULTS = Object.freeze({
   CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
-  X10_RIP_STAGGER, X10_HOLD_AFTER_RIP,
+  X10_STACK_DEPTH, X10_STACK_RISE, X10_ADVANCE, X10_RIP_STAGGER, X10_HOLD_AFTER_RIP,
   DOUBLE_TAP_MS, AUTO_RETURN_DELAY,
 });
 
@@ -118,6 +121,9 @@ const _setters = {
   CARD_VIEW_HEIGHT: (v) => { CARD_VIEW_HEIGHT = v; },
   PACK_OPEN_TIMESCALE: (v) => { PACK_OPEN_TIMESCALE = v; },
   PACK_FADE_DURATION: (v) => { PACK_FADE_DURATION = v; },
+  X10_STACK_DEPTH: (v) => { X10_STACK_DEPTH = v; },
+  X10_STACK_RISE: (v) => { X10_STACK_RISE = v; },
+  X10_ADVANCE: (v) => { X10_ADVANCE = v; },
   X10_RIP_STAGGER: (v) => { X10_RIP_STAGGER = v; },
   X10_HOLD_AFTER_RIP: (v) => { X10_HOLD_AFTER_RIP = v; },
   DOUBLE_TAP_MS: (v) => { DOUBLE_TAP_MS = v; },
