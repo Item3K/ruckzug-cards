@@ -66,8 +66,8 @@ export let X10_STACK_RISE = 0.5;             // Hoch-Versatz pro Pack (Weltunits
 export let X10_FLYOVER = 1.8;                // Dauer des Kamera-Überflugs über den Stapel (Phase 1, s)
 export let X10_RIP_STAGGER = 0.16;           // Versatz zwischen den Aufreiß-Starts (Welle vorne->hinten, s)
 export let X10_HOLD_AFTER_RIP = 0.6;         // Halt am Ende von Phase 1, bevor die Karten beginnen (s)
-export let X10_CAM_HEIGHT = 3.0;             // Kamera-Höhe über dem aktuellen Pack für die schräge Aufsicht
-export let X10_CAM_LOOK_Y = 0.5;             // Blickziel-Höhe (in den Stapel hinein) bei der Aufsicht
+export let X10_CAM_HEIGHT = 1.0;             // Kamera-Höhe über dem aktuellen Pack (flacher Winkel, ähnlich Einzel-Opening)
+export let X10_CAM_LOOK_Y = 0.25;            // Blickziel-Höhe (in den Stapel hinein) bei der Aufsicht
 export let X10_CAM_MOVE = 0.6;               // Dauer des Kamera-Übergangs Stapel-Aufsicht -> Karten-Frontalsicht (s)
 
 // --- Bedienung --------------------------------------------------------------

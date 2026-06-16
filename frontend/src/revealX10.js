@@ -46,6 +46,7 @@ import {
 } from './config.js';
 
 const X10_COUNT = 10;
+const LINEAR = (t) => t; // lineares Easing (konstante Geschwindigkeit) für den Überflug
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('/draco/');
@@ -143,7 +144,8 @@ export class RevealX10 {
     if (!this.active || !this._armed) return;
     this._armed = false;
     this.ui.setHint('');
-    this._run().catch((e) => { console.error('x10:', e); this._fail(e); });
+    const gen = this._gen; // an diese Session binden; reset() entwertet sie
+    this._run(gen).catch((e) => { if (gen === this._gen) { console.error('x10:', e); this._fail(e); } });
   }
 
   /** Shader/Texturen der Pack-Reihe vorab kompilieren (gegen den ersten Ruckler). */
@@ -152,20 +154,23 @@ export class RevealX10 {
     try { this.renderer.compile(this.scene, this.camera); } catch { /* egal */ }
   }
 
-  async _run() {
-    await this._phase1RipAll();    // PHASE 1: Überflug + alle Packs aufreißen
-    if (!this.active) return;
-    await this._toCardsView();     // Übergang: Kamera frontal + Stapel ausblenden
-    if (!this.active) return;
+  async _run(gen) {
+    // gen-Guard nach JEDEM await: ein abgebrochener Durchlauf darf NIE weiterlaufen
+    // (active reicht nicht — eine neue Session setzt active wieder auf true).
+    await this._phase1RipAll(gen);   // PHASE 1: Überflug + alle Packs aufreißen
+    if (gen !== this._gen) return;
+    await this._toCardsView(gen);    // Übergang: Kamera frontal + Stapel ausblenden
+    if (gen !== this._gen) return;
     for (let i = 0; i < this.instances.length; i++) { // PHASE 2: alle Kartenblöcke
-      if (!this.active) return;
+      if (gen !== this._gen) return;
       await this._revealCards(i);
     }
+    if (gen !== this._gen) return;
     this._finish();
   }
 
   // === PHASE 1: Überflug + Wellen-Aufreißen aller Packs =====================
-  async _phase1RipAll() {
+  async _phase1RipAll(gen) {
     const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
     const ripPromises = [];
     for (let k = 0; k < this.instances.length; k++) {
@@ -174,30 +179,30 @@ export class RevealX10 {
       const delay = k * X10_RIP_STAGGER; // Welle: vorne zuerst -> nach hinten
       this.tweens.add({
         delay, duration: 0.001, onUpdate() {},
-        onComplete: () => { if (this.active) this._playRip(k); },
+        onComplete: () => { if (gen === this._gen) this._playRip(k); },
       });
       const stage = this.packsData[k].beam_stage;
       if (stage && stage !== 'normal') {
         this.tweens.add({
           delay: delay + dur * 0.35, duration: 0.001, onUpdate() {},
-          onComplete: () => { if (this.active) this._showBeamAt(k, stage); },
+          onComplete: () => { if (gen === this._gen) this._showBeamAt(k, stage); },
         });
       }
     }
-    // Kamera-Überflug vom vordersten zum hintersten Pack (parallel zur Welle).
-    const flyover = this._tweenCamera(this._poseOverPack(this.instances.length - 1), X10_FLYOVER);
+    // Kamera-Überflug vom vordersten zum hintersten Pack — LINEAR (gleichmäßig).
+    const flyover = this._tweenCamera(this._poseOverPack(this.instances.length - 1), X10_FLYOVER, gen, LINEAR);
     await Promise.all([...ripPromises, flyover]);
     await this._wait(X10_HOLD_AFTER_RIP); // kurz alle offenen Packs zeigen
   }
 
   /** Übergang Phase 1 -> Phase 2: Kamera frontal + den (offenen) Stapel ausblenden. */
-  async _toCardsView() {
+  async _toCardsView(gen) {
     const insts = this.instances;
-    const camP = this._tweenCamera(this._frontalPose(), X10_CAM_MOVE);
+    const camP = this._tweenCamera(this._frontalPose(), X10_CAM_MOVE, gen);
     this.tweens.add({
       duration: PACK_FADE_DURATION,
-      onUpdate: (p) => { for (const inst of insts) this._setInstOpacity(inst, 1 - p); },
-      onComplete: () => { if (this.stackGroup) this.stackGroup.visible = false; },
+      onUpdate: (p) => { if (gen === this._gen) for (const inst of insts) this._setInstOpacity(inst, 1 - p); },
+      onComplete: () => { if (gen === this._gen && this.stackGroup) this.stackGroup.visible = false; },
     });
     await camP;
   }
@@ -303,23 +308,26 @@ export class RevealX10 {
     this.camera.lookAt(this._camTarget);
   }
 
-  _tweenCamera(pose, dur) {
+  _tweenCamera(pose, dur, gen, ease = easeInOutCubic) {
     return new Promise((resolve) => {
       const fromPos = this.camera.position.clone();
       const fromTarget = this._camTarget.clone();
       this.tweens.add({
         duration: dur,
-        ease: easeInOutCubic,
+        ease,
         onUpdate: (p) => {
+          if (gen !== this._gen) return; // nach Abbruch die Kamera NICHT mehr bewegen
           this.camera.position.lerpVectors(fromPos, pose.pos, p);
           this._camTarget.lerpVectors(fromTarget, pose.target, p);
           this.camera.lookAt(this._camTarget);
         },
         onComplete: () => {
-          this.camera.position.copy(pose.pos);
-          this._camTarget.copy(pose.target);
-          this.camera.lookAt(this._camTarget);
-          resolve();
+          if (gen === this._gen) {
+            this.camera.position.copy(pose.pos);
+            this._camTarget.copy(pose.target);
+            this.camera.lookAt(this._camTarget);
+          }
+          resolve(); // immer auflösen, damit await nicht hängt (_run bricht per gen ab)
         },
       });
     });
@@ -454,6 +462,9 @@ export class RevealX10 {
     if (this.stackGroup) {
       this.scene.remove(this.stackGroup);
       for (const inst of (this.instances || [])) {
+        // Hängende Rip-Promise auflösen (stopAllAction feuert KEIN 'finished') ->
+        // Promise.all in Phase 1 bleibt sonst stehen, wenn man mittendrin abbricht.
+        if (inst._onFinish) { const cb = inst._onFinish; inst._onFinish = null; cb(); }
         if (inst.mixer) {
           inst.mixer.stopAllAction();
           inst.mixer.uncacheRoot(inst.obj); // Mixer-interne Caches freigeben (kein Leck über Runs)
