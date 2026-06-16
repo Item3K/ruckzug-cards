@@ -55,6 +55,7 @@ const GROUPS = {
     ['X10_STACK_RISE', 0, 1.2, 0.02, 'Stapel-Hochversatz'],
     ['X10_CAM_HEIGHT', 0, 7, 0.1, 'Kamera von oben'],
     ['X10_CAM_LOOK_Y', -1, 3, 0.1, 'Blickziel-Höhe'],
+    ['X10_CAM_BACK', 0, 8, 0.1, 'Kamera-Abstand (weiter hinten)'],
     ['X10_FLYOVER', 0.5, 5, 0.1, 'Überflug-Tempo'],
     ['X10_FLYOVER_OVERSHOOT', 0, 3, 0.1, 'Überflug-Overshoot'],
     ['X10_RIP_STAGGER', 0, 0.5, 0.01, 'Aufreiß-Welle'],

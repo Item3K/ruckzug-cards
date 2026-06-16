@@ -43,6 +43,7 @@ import {
   X10_HOLD_AFTER_RIP,
   X10_CAM_HEIGHT,
   X10_CAM_LOOK_Y,
+  X10_CAM_BACK,
   X10_CAM_MOVE,
 } from './config.js';
 
@@ -343,10 +344,10 @@ export class RevealX10 {
     return { pos: new THREE.Vector3(0, 0, CAMERA_DISTANCE), target: new THREE.Vector3(0, 0, 0) };
   }
 
-  /** Schräge Aufsicht über Pack k: konstant CAMERA_DISTANCE davor und CAM_HEIGHT darüber. */
+  /** Schräge Aufsicht über Pack k: konstant (CAMERA_DISTANCE+CAM_BACK) davor, CAM_HEIGHT darüber. */
   _poseOverPack(k) {
     const target = new THREE.Vector3(0, k * X10_STACK_RISE + X10_CAM_LOOK_Y, -k * X10_STACK_DEPTH);
-    const pos = target.clone().add(new THREE.Vector3(0, X10_CAM_HEIGHT, CAMERA_DISTANCE));
+    const pos = target.clone().add(new THREE.Vector3(0, X10_CAM_HEIGHT, CAMERA_DISTANCE + X10_CAM_BACK));
     return { pos, target };
   }
 
