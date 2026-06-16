@@ -60,12 +60,14 @@ export let CARD_VIEW_HEIGHT = 2.4;           // Zielhöhe einer Karte in Weltuni
 export let PACK_OPEN_TIMESCALE = 1.15;       // Abspieltempo der Aufreiß-Animation (>1 = kürzer)
 export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 
-// --- x10-Öffnen (Stapel in die Tiefe, gemeinsamer Auftakt, dann Karten) ------
-export let X10_STACK_DEPTH = 0.8;            // Tiefen-Versatz pro Pack im Stapel (Weltunits, nach hinten)
-export let X10_STACK_RISE = 0.14;            // Hoch-Versatz pro Pack (Weltunits) -> Kanten der hinteren Packs sichtbar
-export let X10_ADVANCE = 0.45;               // Dauer, bis der Stapel ein Pack nach vorne rückt (s)
-export let X10_RIP_STAGGER = 0.09;           // Versatz zwischen den 10 (fast) gleichzeitigen Aufreiß-Starts (s) -> Welle/Domino
-export let X10_HOLD_AFTER_RIP = 0.9;         // Pause nach dem gemeinsamen Aufreißen, bevor die Karten kommen (s)
+// --- x10-Öffnen (gestaffelter Tiefen-Stapel, schräge Aufsicht, Pack für Pack) -
+export let X10_STACK_DEPTH = 0.85;           // Tiefen-Versatz pro Pack im Stapel (Weltunits, nach hinten)
+export let X10_STACK_RISE = 0.5;             // Hoch-Versatz pro Pack (Weltunits) -> Oberkanten der hinteren Packs sichtbar
+export let X10_ADVANCE = 0.5;                // Dauer, bis der Stapel ein Pack nach vorne rückt (s)
+export let X10_HOLD_AFTER_RIP = 0.7;         // Pause nach dem Aufreißen des vordersten Packs, bevor die Karten kommen (s)
+export let X10_CAM_HEIGHT = 3.2;             // Kamera-Höhe über der Frontal-Linie für die schräge Aufsicht auf den Stapel
+export let X10_CAM_LOOK_Y = 0.7;             // Blickziel-Höhe (in den Stapel hinein) bei der Aufsicht
+export let X10_CAM_MOVE = 0.55;              // Dauer des Kamera-Übergangs Stapel <-> Karten (s)
 
 // --- Bedienung --------------------------------------------------------------
 export let DOUBLE_TAP_MS = 350;              // max. Abstand zweier Taps für Doppel-Tap (Öffnen)
@@ -84,7 +86,8 @@ export const TUNING_DEFAULTS = Object.freeze({
   CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
-  X10_STACK_DEPTH, X10_STACK_RISE, X10_ADVANCE, X10_RIP_STAGGER, X10_HOLD_AFTER_RIP,
+  X10_STACK_DEPTH, X10_STACK_RISE, X10_ADVANCE, X10_HOLD_AFTER_RIP,
+  X10_CAM_HEIGHT, X10_CAM_LOOK_Y, X10_CAM_MOVE,
   DOUBLE_TAP_MS, AUTO_RETURN_DELAY,
 });
 
@@ -124,8 +127,10 @@ const _setters = {
   X10_STACK_DEPTH: (v) => { X10_STACK_DEPTH = v; },
   X10_STACK_RISE: (v) => { X10_STACK_RISE = v; },
   X10_ADVANCE: (v) => { X10_ADVANCE = v; },
-  X10_RIP_STAGGER: (v) => { X10_RIP_STAGGER = v; },
   X10_HOLD_AFTER_RIP: (v) => { X10_HOLD_AFTER_RIP = v; },
+  X10_CAM_HEIGHT: (v) => { X10_CAM_HEIGHT = v; },
+  X10_CAM_LOOK_Y: (v) => { X10_CAM_LOOK_Y = v; },
+  X10_CAM_MOVE: (v) => { X10_CAM_MOVE = v; },
   DOUBLE_TAP_MS: (v) => { DOUBLE_TAP_MS = v; },
   AUTO_RETURN_DELAY: (v) => { AUTO_RETURN_DELAY = v; },
 };
