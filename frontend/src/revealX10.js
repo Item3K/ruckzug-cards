@@ -164,16 +164,9 @@ export class RevealX10 {
     // (active reicht nicht — eine neue Session setzt active wieder auf true).
 
     // Server-Call JETZT (beim Doppeltipp): würfeln, Sanduhren abziehen, Karten gutschreiben
-    // — wie beim Einzel-Opening. Das erste Pack reißt sofort auf (responsiv, Welle beginnt hier).
+    // — wie beim Einzel-Opening. ERST das Ergebnis abwarten, DANN die Welle planen, damit
+    // das Wellen-Timing NICHT von der (schwankenden) Server-/Frame-Zeit abhängt.
     const resultP = openPackX10(this._packId);
-    resultP.catch(() => {});
-
-    const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
-    const t0 = performance.now();
-    const elapsed = () => (performance.now() - t0) / 1000;
-    const ripPromises = [new Promise((resolve) => { this.instances[0]._onFinish = resolve; })];
-    this._playRip(0); // PACK 0: die Aufreißwelle beginnt mit dem ersten Pack
-
     let result;
     try { result = await resultP; }
     catch (e) { if (gen === this._gen) this._fail(e); return; }
@@ -181,21 +174,20 @@ export class RevealX10 {
     this.result = result;
     this.packsData = result.packs;
 
-    // Restliche Packs als FORTLAUFENDE Welle (Anker = Start von Pack 0, also durchgehend).
-    for (let k = 1; k < this.instances.length; k++) {
+    const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
+    // Aufreißwelle: ALLE Packs bei festen Abständen k*RIP_STAGGER (sauber, entkoppelt).
+    const ripPromises = [];
+    for (let k = 0; k < this.instances.length; k++) {
       const inst = this.instances[k];
       ripPromises.push(new Promise((resolve) => { inst._onFinish = resolve; }));
       this.tweens.add({
-        delay: Math.max(0, k * X10_RIP_STAGGER - elapsed()), duration: 0.001, onUpdate() {},
+        delay: k * X10_RIP_STAGGER, duration: 0.001, onUpdate() {},
         onComplete: () => { if (gen === this._gen) this._playRip(k); },
       });
-    }
-    // Beams aller besonderen Packs (inkl. dem ersten) zur jeweiligen Riss-Zeit.
-    for (let k = 0; k < this.instances.length; k++) {
       const stage = this.packsData[k].beam_stage;
       if (stage && stage !== 'normal') {
         this.tweens.add({
-          delay: Math.max(0, k * X10_RIP_STAGGER + dur * 0.35 - elapsed()), duration: 0.001, onUpdate() {},
+          delay: k * X10_RIP_STAGGER + dur * 0.35, duration: 0.001, onUpdate() {},
           onComplete: () => { if (gen === this._gen) this._showBeamAt(k, stage); },
         });
       }
@@ -203,8 +195,7 @@ export class RevealX10 {
     // Kamera-Überflug: startet leicht verzögert (nach dem ersten Beam), gleichmäßig, am
     // Ende weich; endet DIREKT am letzten Pack (Overshoot-Default 0).
     const endK = (this.instances.length - 1) + X10_FLYOVER_OVERSHOOT;
-    const flyDelay = Math.max(0, dur * 0.35 - elapsed());
-    const flyover = this._tweenCamera(this._poseOverPack(endK), X10_FLYOVER, gen, flyoverEase, flyDelay);
+    const flyover = this._tweenCamera(this._poseOverPack(endK), X10_FLYOVER, gen, flyoverEase, dur * 0.35);
 
     await Promise.all([...ripPromises, flyover]);
     if (gen !== this._gen) return;
