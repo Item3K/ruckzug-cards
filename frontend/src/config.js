@@ -61,9 +61,8 @@ export let PACK_OPEN_TIMESCALE = 1.15;       // Abspieltempo der Aufreiß-Animat
 export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 
 // --- x10-Öffnen (10 Packs in einer Reihe, Durchfliegen) ---------------------
-export let X10_SPACING = 3.2;                // Tiefen-Abstand der Packs in der Reihe (Weltunits)
-export let X10_TRANSITION = 0.6;             // Dauer des Vorrückens zum nächsten Pack (s)
-export let X10_RIP_DELAY = 0.12;             // Verzögerung bis das ankommende Pack aufreißt (s) -> Wellen-/Domino-Versatz
+export let X10_RIP_STAGGER = 0.09;           // Versatz zwischen den 10 (fast) gleichzeitigen Aufreiß-Starts (s) -> Welle/Domino
+export let X10_HOLD_AFTER_RIP = 0.9;         // Pause nach dem gemeinsamen Aufreißen, bevor die Karten kommen (s)
 
 // --- Bedienung --------------------------------------------------------------
 export let DOUBLE_TAP_MS = 350;              // max. Abstand zweier Taps für Doppel-Tap (Öffnen)
@@ -82,7 +81,7 @@ export const TUNING_DEFAULTS = Object.freeze({
   CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
-  X10_SPACING, X10_TRANSITION, X10_RIP_DELAY,
+  X10_RIP_STAGGER, X10_HOLD_AFTER_RIP,
   DOUBLE_TAP_MS, AUTO_RETURN_DELAY,
 });
 
@@ -119,9 +118,8 @@ const _setters = {
   CARD_VIEW_HEIGHT: (v) => { CARD_VIEW_HEIGHT = v; },
   PACK_OPEN_TIMESCALE: (v) => { PACK_OPEN_TIMESCALE = v; },
   PACK_FADE_DURATION: (v) => { PACK_FADE_DURATION = v; },
-  X10_SPACING: (v) => { X10_SPACING = v; },
-  X10_TRANSITION: (v) => { X10_TRANSITION = v; },
-  X10_RIP_DELAY: (v) => { X10_RIP_DELAY = v; },
+  X10_RIP_STAGGER: (v) => { X10_RIP_STAGGER = v; },
+  X10_HOLD_AFTER_RIP: (v) => { X10_HOLD_AFTER_RIP = v; },
   DOUBLE_TAP_MS: (v) => { DOUBLE_TAP_MS = v; },
   AUTO_RETURN_DELAY: (v) => { AUTO_RETURN_DELAY = v; },
 };

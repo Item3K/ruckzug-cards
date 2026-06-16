@@ -13,7 +13,7 @@
  * @param {()=>void} opts.onOpen
  * @param {()=>void} opts.onBack
  */
-export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, showPicker = true }) {
+export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, onExit, showPicker = true }) {
   const root = document.createElement('div');
   root.className = 'ui';
 
@@ -46,12 +46,30 @@ export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, 
   const status = document.createElement('div');
   status.className = 'status';
 
+  // --- Exit-Button (X), oben rechts — beendet JEDES Opening (Einzel + x10).
+  //     Serverseitig ist beim Reveal eh alles gewürfelt/verbucht -> man verpasst nichts.
+  const exitBtn = document.createElement('button');
+  exitBtn.className = 'exit-btn';
+  exitBtn.textContent = '✕';
+  exitBtn.title = 'Schließen (Esc)';
+  exitBtn.setAttribute('aria-label', 'Opening schließen');
+  exitBtn.addEventListener('click', () => { if (onExit) onExit(); });
+
+  // --- Pack-Skip-Button (nur x10): überspringt die restlichen Karten des
+  //     aktuellen Packs und springt zum nächsten Pack-Block.
+  const skipBtn = document.createElement('button');
+  skipBtn.className = 'skip-btn';
+  skipBtn.textContent = 'Pack überspringen ⏭';
+  skipBtn.hidden = true;
+
   // Hinweis: Öffnen läuft über Doppel-Tap aufs Pack, Zurück über Auto-Return
   // (nach der letzten Karte) — daher KEINE Öffnen-/Zurück-Buttons mehr.
 
   root.appendChild(picker);
   root.appendChild(hint);
   root.appendChild(status);
+  root.appendChild(exitBtn);
+  root.appendChild(skipBtn);
   document.body.appendChild(root);
 
   setActivePack(initialId);
@@ -61,10 +79,18 @@ export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, 
   }
   setMode('select');
 
-  return {
+  let visible = false;
+  // Esc beendet das Opening (nur während ein Opening sichtbar ist).
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && visible && onExit) { e.preventDefault(); onExit(); }
+  });
+
+  const api = {
+    onSkip: null, // von revealX10 gesetzt; vom Skip-Button aufgerufen
     setActivePack,
     setMode,
     setVisible(b) {
+      visible = b;
       root.style.display = b ? 'flex' : 'none';
     },
     setStatus(text) {
@@ -76,8 +102,14 @@ export function createUI({ packs = [], initialId, onSelectPack, onOpen, onBack, 
     setProgress(revealed, total) {
       status.textContent = `Karte ${Math.min(revealed + 1, total)} / ${total}`;
     },
+    /** Skip-Button ein-/ausblenden (x10-Karten-Durchgang). */
+    showSkip(b) {
+      skipBtn.hidden = !b;
+    },
     setOpenEnabled() {
       // No-op: kein Öffnen-Button mehr (Öffnen via Doppel-Tap).
     },
   };
+  skipBtn.addEventListener('click', () => { if (api.onSkip) api.onSkip(); });
+  return api;
 }

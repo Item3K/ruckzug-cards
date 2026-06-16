@@ -1,24 +1,27 @@
-// x10-Öffnen (Phase x10): 10 Packs in EINER Reihe, durchfliegen, Pack für Pack.
+// x10-Öffnen (Phase x10, korrektes Verhalten wie TCG Pocket):
 //
-// - KEINE Dreh-Phase. Die 10 Packs stehen hintereinander (Tiefe), eins vorne,
-//   die anderen dahinter angedeutet (Perspektive).
-// - Pro Pack: Aufreiß-Animation (versetzt/Domino, weil der Rip beim Vorrücken
-//   startet), Beam ERST wenn dieses Pack dran ist, dann die 10 Karten über den
-//   bestehenden CardStack (gleiche Wisch-Mechanik wie Einzel-Opening).
-// - Performance: das Pack-GLB wird EINMAL geladen und 10x geklont (geteilte
-//   Geometrie/Texturen; nur pro Instanz eigene Materialien für die Opazität).
-//   Die 100 Karten teilen sich – wie im Einzel-Opening – das filet-Template.
+// 1) EINMALIGER gemeinsamer Auftakt: alle 10 Packs (als Raster sichtbar) reißen
+//    FAST gleichzeitig, nur leicht versetzt (Welle/Domino) auf. Pro Pack erscheint
+//    dabei – falls es etwas Besonderes enthält – sein Beam (silber/gold) an seiner
+//    Position. Mehrere Beams gleichzeitig möglich.
+// 2) Danach werden die Packs ausgeblendet und man fliegt NUR noch durch die Karten:
+//    10er-Blöcke (Pack für Pack) über den bestehenden CardStack, ohne weitere
+//    Aufreiß-Animationen. Fortschritt „Pack i/10 · Karte r/10".
 //
-// Wiederverwendet: cardStack, beam, ui, tweens. Eigene leichte Pack-Reihe statt
-// PackViewer (der ist auf genau ein Modell ausgelegt).
+// Performance: das Pack-GLB wird EINMAL geladen und 10x geklont (geteilte Geometrie/
+// Texturen; nur pro Instanz eigene Materialien für die Opazität). Karten teilen wie
+// bisher das filet-Template (cardStack).
+//
+// Wiederverwendet: cardStack, ui, tweens. Für die mehreren gleichzeitigen Beams
+// werden eigene Beam-Instanzen erzeugt (die geteilte beam-Instanz kann nur eine).
 
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { Beam } from './beam.js';
 import { openPackX10 } from './api.js';
 import { resolveSetAsset } from './setLoader.js';
-import { easeInOutCubic } from './tween.js';
 import {
   PACK_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE,
@@ -27,12 +30,13 @@ import {
   BEAM_RIP_HEIGHT_FACTOR,
   BEAM_RIP_X_FACTOR,
   AUTO_RETURN_DELAY,
-  X10_SPACING,
-  X10_TRANSITION,
-  X10_RIP_DELAY,
+  X10_RIP_STAGGER,
+  X10_HOLD_AFTER_RIP,
 } from './config.js';
 
 const X10_COUNT = 10;
+const GRID_COLS = 5;
+const GRID_ROWS = 2;
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('/draco/');
@@ -40,10 +44,9 @@ const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
 export class RevealX10 {
-  constructor({ scene, camera, beam, cardStack, tweens, ui, onComplete }) {
+  constructor({ scene, camera, cardStack, tweens, ui, onComplete }) {
     this.scene = scene;
     this.camera = camera;
-    this.beam = beam;
     this.cardStack = cardStack;
     this.tweens = tweens;
     this.ui = ui;
@@ -52,20 +55,25 @@ export class RevealX10 {
     this.active = false;
     this.result = null;
     this.packsData = null;
-    this.instances = null;       // [{ holder, obj, mixer, action, playing, _onFinish }]
+    this.instances = null;       // [{ holder, obj, mixer, action, playing, gridPos, _onFinish }]
     this.rowGroup = null;
-    this._base = null;           // { scene, center, scale, clip, clipDur }
+    this._beams = [];            // mehrere gleichzeitige Beams (Auftakt)
+    this._base = null;           // { scene, center, scale, width, clip, clipDur }
     this._baseUrl = null;
-    this._spacing = X10_SPACING;
+    this._packScale = PACK_VIEW_HEIGHT;
     this._returnTimer = null;
+    this._waitTimer = null;
+    this._blockResolve = null;   // löst den aktuellen Karten-Block (Skip/Exit)
   }
 
-  /** Pro Frame: laufende Rip-Mixer der Pack-Reihe aktualisieren. */
+  /** Pro Frame: laufende Rip-Mixer + aktive Beams aktualisieren. */
   update(delta) {
-    if (!this.instances) return;
-    for (const inst of this.instances) {
-      if (inst.playing && inst.mixer) inst.mixer.update(delta);
+    if (this.instances) {
+      for (const inst of this.instances) {
+        if (inst.playing && inst.mixer) inst.mixer.update(delta);
+      }
     }
+    for (const b of this._beams) b.update(delta);
   }
 
   async start(packId, ripUrl) {
@@ -103,73 +111,68 @@ export class RevealX10 {
   }
 
   async _run() {
+    await this._openingAuftakt();          // alle Packs einmal gemeinsam aufreißen + Beams
+    if (!this.active) return;
+    this._fadeAllPacks();                   // Packs raus -> danach reiner Karten-Durchflug
     for (let i = 0; i < this.instances.length; i++) {
-      if (!this.active) return;
-      await this._advanceAndOpen(i);
       if (!this.active) return;
       await this._revealCards(i);
     }
     this._finish();
   }
 
-  /** Pack i nach vorn bringen (Slide) + aufreißen (versetzt) + Beam, bis Rip fertig. */
-  async _advanceAndOpen(i) {
-    const inst = this.instances[i];
-    const clipDur = this._base.clipDur;
-    const dur = clipDur > 0 ? clipDur / PACK_OPEN_TIMESCALE : 0;
-    const ripStartDelay = i === 0 ? 0 : X10_RIP_DELAY;
-
-    const ripDone = new Promise((resolve) => { inst._onFinish = resolve; });
-
-    const slideP = i === 0
-      ? Promise.resolve()
-      : this._tweenRow(i * this._spacing, X10_TRANSITION);
-
-    // Rip leicht verzögert starten -> Wellen-/Domino-Gefühl beim Durchfliegen.
-    this.tweens.add({
-      delay: ripStartDelay, duration: 0.001, onUpdate() {},
-      onComplete: () => { if (this.active) this._playRip(i); },
-    });
-
-    // Beam erst, wenn DIESES Pack dran ist (~35 % der Rip-Dauer nach dem Start).
-    const stage = this.packsData[i].beam_stage;
-    this.tweens.add({
-      delay: ripStartDelay + dur * 0.35, duration: 0.001, onUpdate() {},
-      onComplete: () => { if (this.active) this.beam.show(stage, this._ripPos(), PACK_VIEW_HEIGHT); },
-    });
-
-    await Promise.all([slideP, ripDone]);
+  /** Einmaliger gemeinsamer Aufreiß-Auftakt: alle Packs versetzt, Beams pro Pack. */
+  async _openingAuftakt() {
+    const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
+    const ripPromises = [];
+    for (let i = 0; i < this.instances.length; i++) {
+      const inst = this.instances[i];
+      ripPromises.push(new Promise((resolve) => { inst._onFinish = resolve; }));
+      const delay = i * X10_RIP_STAGGER;
+      this.tweens.add({
+        delay, duration: 0.001, onUpdate() {},
+        onComplete: () => { if (this.active) this._playRip(i); },
+      });
+      const stage = this.packsData[i].beam_stage;
+      if (stage && stage !== 'normal') {
+        this.tweens.add({
+          delay: delay + dur * 0.35, duration: 0.001, onUpdate() {},
+          onComplete: () => { if (this.active) this._showBeam(i, stage); },
+        });
+      }
+    }
+    await Promise.all(ripPromises);
+    await this._wait(X10_HOLD_AFTER_RIP); // kurz halten, damit man offene Packs + Beams sieht
   }
 
-  /** Die 10 Karten dieses Packs über den bestehenden CardStack zeigen. */
+  /** Die 10 Karten eines Packs über den bestehenden CardStack durchgehen. */
   async _revealCards(i) {
-    const inst = this.instances[i];
     const total = this.instances.length;
     const cards = this.packsData[i].drawn_cards.map((c) => ({
       ...c, assetUrl: resolveSetAsset(c.set_id, c.asset),
     }));
 
-    // Stapel versteckt vorbauen (Modus 'vorne': sofort sichtbare Front, durchwischen).
     this.cardStack.build(cards, 'vorne', CARD_VIEW_HEIGHT, true);
 
-    const doneP = new Promise((resolve) => { this.cardStack.onDone = resolve; });
+    const doneP = new Promise((resolve) => { this._blockResolve = resolve; });
+    this.cardStack.onDone = () => { if (this._blockResolve) this._blockResolve(); };
     this.cardStack.onProgress = (r, t) =>
       this.ui.setStatus(`Pack ${i + 1}/${total} · Karte ${Math.min(r + 1, t)}/${t}`);
 
-    // Cross-Fade: Karten zeigen, Pack gleichzeitig ausblenden.
     this.cardStack.begin();
     this.cardStack.enableInput();
-    this.tweens.add({
-      duration: PACK_FADE_DURATION,
-      onUpdate: (p) => this._setInstOpacity(inst, 1 - p),
-      onComplete: () => this._setInstOpacity(inst, 0),
-    });
 
     this.ui.setMode('reveal');
     this.ui.setStatus(`Pack ${i + 1}/${total} · Karte 1/${cards.length}`);
     this.ui.setHint('Karte ziehen/klicken: weiter');
+    this.ui.onSkip = () => { if (this._blockResolve) this._blockResolve(); }; // Pack überspringen
+    this.ui.showSkip(true);
 
     await doneP;
+
+    this._blockResolve = null;
+    this.ui.onSkip = null;
+    this.ui.showSkip(false);
     this.cardStack.disableInput();
     this.cardStack.dispose();
   }
@@ -190,24 +193,28 @@ export class RevealX10 {
     inst.playing = true;
   }
 
-  _ripPos() {
-    // Vorderstes Pack steht (nach dem Slide) im Ursprung -> Riss-Position wie Einzel.
+  _showBeam(i, stage) {
+    const inst = this.instances[i];
+    const beam = new Beam(this.scene, this.camera);
+    beam.show(stage, this._ripPosFor(inst), this._packScale);
+    this._beams.push(beam);
+  }
+
+  _ripPosFor(inst) {
+    // Riss-Position relativ zur (skalierten) Pack-Position im Raster.
     return new THREE.Vector3(
-      PACK_VIEW_HEIGHT * BEAM_RIP_X_FACTOR,
-      PACK_VIEW_HEIGHT * BEAM_RIP_HEIGHT_FACTOR,
-      0,
+      inst.gridPos.x + this._packScale * BEAM_RIP_X_FACTOR,
+      inst.gridPos.y + this._packScale * BEAM_RIP_HEIGHT_FACTOR,
+      inst.gridPos.z,
     );
   }
 
-  _tweenRow(toZ, dur) {
-    return new Promise((resolve) => {
-      const from = this.rowGroup.position.z;
-      this.tweens.add({
-        duration: dur,
-        ease: easeInOutCubic,
-        onUpdate: (p) => { this.rowGroup.position.z = from + (toZ - from) * p; },
-        onComplete: resolve,
-      });
+  _fadeAllPacks() {
+    const insts = this.instances;
+    this.tweens.add({
+      duration: PACK_FADE_DURATION,
+      onUpdate: (p) => { for (const inst of insts) this._setInstOpacity(inst, 1 - p); },
+      onComplete: () => { for (const inst of insts) this._setInstOpacity(inst, 0); },
     });
   }
 
@@ -225,7 +232,14 @@ export class RevealX10 {
     inst.holder.visible = op > 0.001;
   }
 
-  // --- Pack-Reihe (laden / klonen / aufräumen) ------------------------------
+  _wait(seconds) {
+    return new Promise((resolve) => {
+      this._waitResolve = resolve;
+      this._waitTimer = setTimeout(() => { this._waitTimer = null; resolve(); }, seconds * 1000);
+    });
+  }
+
+  // --- Pack-Raster (laden / klonen / aufräumen) -----------------------------
   async _ensureBase(url) {
     if (this._base && this._baseUrl === url) return;
     this._disposeBase();
@@ -235,33 +249,52 @@ export class RevealX10 {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const clip = gltf.animations[0] || null;
+    const scale = PACK_VIEW_HEIGHT / size.y;
     this._base = {
-      scene, center, scale: PACK_VIEW_HEIGHT / size.y,
+      scene, center, scale, width: size.x * scale,
       clip, clipDur: clip ? clip.duration : 0,
     };
     this._baseUrl = url;
   }
 
+  /** 10 Packs als zentriertes 5x2-Raster, skaliert auf den sichtbaren Bereich. */
   _buildRow() {
     this._disposeRow();
-    this._spacing = X10_SPACING;
     this.rowGroup = new THREE.Group();
     this.instances = [];
+    const b = this._base;
+
+    // Sichtbarer Bereich bei z = 0 (feste Kamera).
+    const visH = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * Math.abs(this.camera.position.z);
+    const visW = visH * this.camera.aspect;
+    const cellW = (visW * 0.92) / GRID_COLS;
+    const cellH = (visH * 0.80) / GRID_ROWS;
+    const gap = 0.16; // Rand pro Zelle
+    const fit = Math.min((cellW * (1 - gap)) / b.width, (cellH * (1 - gap)) / PACK_VIEW_HEIGHT);
+    this._packScale = PACK_VIEW_HEIGHT * fit;
+    const gridScale = b.scale * fit;
+
     for (let k = 0; k < X10_COUNT; k++) {
-      const inst = this._makeInstance();
-      inst.holder.position.set(0, 0, -k * this._spacing);
+      const col = k % GRID_COLS;
+      const rowIdx = Math.floor(k / GRID_COLS);
+      const inst = this._makeInstance(gridScale);
+      inst.holder.position.set(
+        (col - (GRID_COLS - 1) / 2) * cellW,
+        ((GRID_ROWS - 1) / 2 - rowIdx) * cellH,
+        0,
+      );
+      inst.gridPos = inst.holder.position.clone();
       this.rowGroup.add(inst.holder);
       this.instances.push(inst);
     }
-    this.rowGroup.position.set(0, 0, 0);
     this.scene.add(this.rowGroup);
   }
 
-  _makeInstance() {
+  _makeInstance(scale) {
     const b = this._base;
     const obj = skeletonClone(b.scene);
     obj.position.copy(b.center).multiplyScalar(-1); // Mittelpunkt in den Holder-Ursprung
-    // Eigene Materialien je Instanz (für unabhängige Opazität); Texturen bleiben geteilt.
+    // Eigene Materialien je Instanz (unabhängige Opazität); Texturen bleiben geteilt.
     obj.traverse((o) => {
       if (o.isMesh && o.material) {
         o.material = Array.isArray(o.material)
@@ -271,9 +304,9 @@ export class RevealX10 {
     });
     const holder = new THREE.Group();
     holder.add(obj);
-    holder.scale.setScalar(b.scale);
+    holder.scale.setScalar(scale);
 
-    const inst = { holder, obj, mixer: null, action: null, playing: false, _onFinish: null };
+    const inst = { holder, obj, mixer: null, action: null, playing: false, gridPos: null, _onFinish: null };
     if (b.clip) {
       inst.mixer = new THREE.AnimationMixer(obj);
       inst.action = inst.mixer.clipAction(b.clip);
@@ -294,6 +327,7 @@ export class RevealX10 {
   _finish() {
     this.active = false;
     this.cardStack.disableInput();
+    this.ui.showSkip(false);
     this.ui.setMode('done');
     this.ui.setStatus(`Fertig — Sanduhren übrig: ${this.result.hourglasses_remaining}`);
     if (this.onComplete) {
@@ -311,6 +345,7 @@ export class RevealX10 {
       : e && e.status === 400
         ? 'Zu wenig Sanduhren für x10.'
         : `Fehler beim Öffnen: ${e?.message || e}`;
+    this.ui.showSkip(false);
     this.ui.setMode('done');
     this.ui.setStatus(msg);
     if (this.onComplete) {
@@ -323,10 +358,17 @@ export class RevealX10 {
 
   reset() {
     if (this._returnTimer) { clearTimeout(this._returnTimer); this._returnTimer = null; }
+    if (this._waitTimer) { clearTimeout(this._waitTimer); this._waitTimer = null; }
     this.active = false;
+    // Laufenden Karten-Block/Wartepunkt entsperren, damit _run sauber endet.
+    if (this._blockResolve) { const r = this._blockResolve; this._blockResolve = null; r(); }
+    if (this._waitResolve) { const r = this._waitResolve; this._waitResolve = null; r(); }
+    this.ui.onSkip = null;
+    this.ui.showSkip(false);
     this.cardStack.disableInput();
     this.cardStack.dispose();
-    this.beam.dispose();
+    for (const b of this._beams) b.dispose();
+    this._beams = [];
     this._disposeRow();
     this.result = null;
     this.packsData = null;

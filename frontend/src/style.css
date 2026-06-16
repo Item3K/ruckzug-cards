@@ -143,6 +143,50 @@ canvas {
   border-color: #94a3b8;
 }
 
+/* --- Exit-Button (X) im Opening (Einzel + x10), oben rechts --- */
+.exit-btn {
+  position: absolute;
+  top: env(safe-area-inset-top, 12px);
+  right: 12px;
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid #475569;
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  backdrop-filter: blur(6px);
+  transition: border-color 0.15s, filter 0.15s;
+}
+.exit-btn:hover { border-color: #94a3b8; }
+
+/* --- Pack-Skip-Button (nur x10-Karten-Durchgang), unten mittig --- */
+.skip-btn {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 12px) + 44px);
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  padding: 12px 20px;
+  min-height: 48px;
+  border: 1px solid #475569;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 5;
+  backdrop-filter: blur(6px);
+  transition: border-color 0.15s;
+}
+.skip-btn[hidden] { display: none; }
+.skip-btn:hover { border-color: #94a3b8; }
+
 /* --- Modus-Sichtbarkeit --- */
 /* Auswahl: nur der Doppel-Tap-Hinweis (Buttons gibt es nicht mehr). */
 

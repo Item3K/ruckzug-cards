@@ -58,6 +58,7 @@ const ui = createUI({
   showPicker: false,
   onOpen: () => reveal.start(currentPack.backendPackId),
   onBack: () => enterLanding(),
+  onExit: () => enterLanding(), // Exit (X / Esc) für Einzel- UND x10-Opening
 });
 
 const reveal = new RevealSequence({
@@ -66,9 +67,10 @@ const reveal = new RevealSequence({
   onComplete: () => enterLanding(), // Auto-Zurück nach der letzten Karte
 });
 
-// x10-Modus (10 Packs auf einmal) — teilt sich beam/cardStack/ui mit dem Einzel-Opening.
+// x10-Modus (10 Packs auf einmal) — teilt sich cardStack/ui mit dem Einzel-Opening;
+// eigene Beam-Instanzen für mehrere gleichzeitige Beams im Auftakt.
 revealX10 = new RevealX10({
-  scene, camera, beam, cardStack, tweens, ui,
+  scene, camera, cardStack, tweens, ui,
   onComplete: () => enterLanding(),
 });
 
