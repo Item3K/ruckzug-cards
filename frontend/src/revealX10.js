@@ -38,6 +38,7 @@ import {
   X10_STACK_DEPTH,
   X10_STACK_RISE,
   X10_FLYOVER,
+  X10_FLYOVER_OVERSHOOT,
   X10_RIP_STAGGER,
   X10_HOLD_AFTER_RIP,
   X10_CAM_HEIGHT,
@@ -47,12 +48,12 @@ import {
 
 const X10_COUNT = 10;
 
-// Überflug-Easing: konstante Geschwindigkeit (linear) für den Großteil der Fahrt, am
-// Ende aber WEICH auslaufend (kein harter Stopp). Linear bis k, danach quadratischer
-// Auslauf; die Steigung im linearen Teil ist knapp > 1, damit der Auslauf die Reststrecke
-// noch schafft (kein erneutes Beschleunigen, nur Abbremsen ganz am Schluss).
+// Überflug-Easing: konstante Geschwindigkeit (linear) für den Großteil der Fahrt, erst
+// ganz am Ende WEICH auslaufend (kein harter Stopp, kein erneutes Beschleunigen). Linear
+// bis k, danach quadratischer Auslauf. Der Auslauf liegt im Overshoot HINTER dem letzten
+// Pack, damit alle Packs (inkl. dem letzten) bei konstantem Tempo voll überflogen werden.
 function flyoverEase(t) {
-  const k = 0.82;
+  const k = 0.9;
   const m = 2 / (k + 1);
   if (t < k) return m * t;
   const r = 1 - t;
@@ -200,8 +201,10 @@ export class RevealX10 {
         });
       }
     }
-    // Kamera-Überflug vom vordersten zum hintersten Pack — gleichmäßig, am Ende weich.
-    const flyover = this._tweenCamera(this._poseOverPack(this.instances.length - 1), X10_FLYOVER, gen, flyoverEase);
+    // Kamera-Überflug: über ALLE Packs (inkl. dem letzten) bei konstantem Tempo bis ein
+    // Stück HINTER den Stapel (Overshoot) — dort läuft die Fahrt weich aus.
+    const endK = (this.instances.length - 1) + X10_FLYOVER_OVERSHOOT;
+    const flyover = this._tweenCamera(this._poseOverPack(endK), X10_FLYOVER, gen, flyoverEase);
     await Promise.all([...ripPromises, flyover]);
     await this._wait(X10_HOLD_AFTER_RIP); // kurz alle offenen Packs zeigen
   }

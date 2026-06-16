@@ -64,6 +64,7 @@ export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 export let X10_STACK_DEPTH = 0.85;           // Tiefen-Versatz pro Pack im Stapel (Weltunits, nach hinten)
 export let X10_STACK_RISE = 0.5;             // Hoch-Versatz pro Pack (Weltunits) -> Oberkanten der hinteren Packs sichtbar
 export let X10_FLYOVER = 1.8;                // Dauer des Kamera-Überflugs über den Stapel (Phase 1, s)
+export let X10_FLYOVER_OVERSHOOT = 1.2;      // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen) -> letztes Pack wird voll überflogen, Auslauf passiert dahinter
 export let X10_RIP_STAGGER = 0.16;           // Versatz zwischen den Aufreiß-Starts (Welle vorne->hinten, s)
 export let X10_HOLD_AFTER_RIP = 0.6;         // Halt am Ende von Phase 1, bevor die Karten beginnen (s)
 export let X10_CAM_HEIGHT = 1.0;             // Kamera-Höhe über dem aktuellen Pack (flacher Winkel, ähnlich Einzel-Opening)
@@ -87,8 +88,8 @@ export const TUNING_DEFAULTS = Object.freeze({
   CARD_STACK_DEPTH, ARROW_SIZE_FACTOR, ARROW_GAP_FACTOR, ARROW_COLOR,
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
-  X10_STACK_DEPTH, X10_STACK_RISE, X10_FLYOVER, X10_RIP_STAGGER, X10_HOLD_AFTER_RIP,
-  X10_CAM_HEIGHT, X10_CAM_LOOK_Y, X10_CAM_MOVE,
+  X10_STACK_DEPTH, X10_STACK_RISE, X10_FLYOVER, X10_FLYOVER_OVERSHOOT,
+  X10_RIP_STAGGER, X10_HOLD_AFTER_RIP, X10_CAM_HEIGHT, X10_CAM_LOOK_Y, X10_CAM_MOVE,
   DOUBLE_TAP_MS, AUTO_RETURN_DELAY,
 });
 
@@ -128,6 +129,7 @@ const _setters = {
   X10_STACK_DEPTH: (v) => { X10_STACK_DEPTH = v; },
   X10_STACK_RISE: (v) => { X10_STACK_RISE = v; },
   X10_FLYOVER: (v) => { X10_FLYOVER = v; },
+  X10_FLYOVER_OVERSHOOT: (v) => { X10_FLYOVER_OVERSHOOT = v; },
   X10_RIP_STAGGER: (v) => { X10_RIP_STAGGER = v; },
   X10_HOLD_AFTER_RIP: (v) => { X10_HOLD_AFTER_RIP = v; },
   X10_CAM_HEIGHT: (v) => { X10_CAM_HEIGHT = v; },
