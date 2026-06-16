@@ -78,6 +78,7 @@ export class RevealX10 {
     this.active = false;
     this._armed = false;         // wartet auf Doppeltipp zum Sequenzstart
     this._gen = 0;               // Generations-Token: invalidiert alte async-Durchläufe
+    this._packId = null;         // gemerkt in present(), Server-Call erst beim Doppeltipp
     this.result = null;
     this.packsData = null;
     this.instances = null;       // [{ holder, obj, mixer, action, playing, _onFinish }]
@@ -103,22 +104,21 @@ export class RevealX10 {
   }
 
   /**
-   * Zeigt den geschlossenen, gestaffelten Stapel (schräge Aufsicht) und lädt alles vor.
-   * Die Aufreiß-Sequenz startet ERST per beginSequence() (Doppeltipp), analog zum
-   * Einzel-Opening. Ein Generations-Token (gen) stellt sicher, dass ein abgebrochener
-   * Durchlauf nicht später noch auf bereits aufgeräumte Objekte zugreift.
+   * Zeigt den geschlossenen, gestaffelten Stapel (schräge Aufsicht) und lädt nur die
+   * 3D-Assets vor. Es wird hier NOCH NICHT gewürfelt/abgerechnet — der Server-Call
+   * (Sanduhren abziehen + Karten gutschreiben) passiert erst beim Doppeltipp
+   * (beginSequence), genau wie beim Einzel-Opening. Ein Generations-Token (gen)
+   * verhindert, dass ein abgebrochener Durchlauf später noch zugreift.
    */
   async present(packId, ripUrl) {
     if (this.active) return;
     this.active = true;
     this._armed = false;
+    this._packId = packId; // für den späteren Server-Call beim Doppeltipp
     const gen = ++this._gen;
     this.ui.setMode('opening');
     this.ui.setStatus('');
     this.ui.setHint('Lädt …');
-
-    const resultP = openPackX10(packId);
-    resultP.catch(() => {});
 
     try {
       await this._ensureBase(ripUrl);
@@ -133,17 +133,6 @@ export class RevealX10 {
     this._snapCamera(this._poseOverPack(0)); // schräge Aufsicht auf das vorderste Pack
     this._prewarm();                          // Shader/Texturen kompilieren -> kein Ruckler
 
-    let result;
-    try {
-      result = await resultP;
-    } catch (e) {
-      if (gen === this._gen) this._fail(e);
-      return;
-    }
-    if (gen !== this._gen) return;
-    this.result = result;
-    this.packsData = result.packs;
-
     // Bereit: auf Doppeltipp warten (kein Drehen im x10 — nur ansehen + Start).
     this._armed = true;
     this.ui.setMode('select');
@@ -156,6 +145,7 @@ export class RevealX10 {
     if (!this.active || !this._armed) return;
     this._armed = false;
     this.ui.setHint('');
+    this.ui.setStatus('Öffnet …');
     const gen = this._gen; // an diese Session binden; reset() entwertet sie
     this._run(gen).catch((e) => { if (gen === this._gen) { console.error('x10:', e); this._fail(e); } });
   }
@@ -169,9 +159,41 @@ export class RevealX10 {
   async _run(gen) {
     // gen-Guard nach JEDEM await: ein abgebrochener Durchlauf darf NIE weiterlaufen
     // (active reicht nicht — eine neue Session setzt active wieder auf true).
-    await this._phase1RipAll(gen);   // PHASE 1: Überflug + alle Packs aufreißen
+
+    // Server-Call JETZT (beim Doppeltipp): würfeln, Sanduhren abziehen, Karten gutschreiben
+    // — wie beim Einzel-Opening. Parallel reißt schon das erste Pack auf (responsiv).
+    const resultP = openPackX10(this._packId);
+    resultP.catch(() => {});
+
+    const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
+    const t0 = performance.now();
+    const rip0 = new Promise((resolve) => { this.instances[0]._onFinish = resolve; });
+    this._playRip(0); // erstes Pack reißt auf (Kamera ist auf Pack 0)
+
+    let result;
+    try { result = await resultP; }
+    catch (e) { if (gen === this._gen) this._fail(e); return; }
     if (gen !== this._gen) return;
-    await this._toCardsView(gen);    // Übergang: Kamera frontal + Stapel ausblenden
+    this.result = result;
+    this.packsData = result.packs;
+
+    // Beam des ersten Packs zur Riss-Zeit (~35 % der Rip-Dauer ab Rip-Start).
+    const stage0 = this.packsData[0].beam_stage;
+    if (stage0 && stage0 !== 'normal') {
+      const elapsed = (performance.now() - t0) / 1000;
+      this.tweens.add({
+        delay: Math.max(0, dur * 0.35 - elapsed), duration: 0.001, onUpdate() {},
+        onComplete: () => { if (gen === this._gen) this._showBeamAt(0, stage0); },
+      });
+    }
+    await rip0;                              // erstes Pack offen
+    if (gen !== this._gen) return;
+    await this._wait(X10_HOLD_AFTER_RIP);    // Beam des ersten Packs sehen, BEVOR der Überflug startet
+    if (gen !== this._gen) return;
+
+    await this._flyoverRest(gen, dur);       // jetzt erst der Überflug über die restlichen Packs
+    if (gen !== this._gen) return;
+    await this._toCardsView(gen);            // Übergang: Kamera frontal + Stapel ausblenden
     if (gen !== this._gen) return;
     for (let i = 0; i < this.instances.length; i++) { // PHASE 2: alle Kartenblöcke
       if (gen !== this._gen) return;
@@ -181,14 +203,13 @@ export class RevealX10 {
     this._finish();
   }
 
-  // === PHASE 1: Überflug + Wellen-Aufreißen aller Packs =====================
-  async _phase1RipAll(gen) {
-    const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
+  // === PHASE 1b: Überflug über die restlichen Packs (1..letztes) + Welle =====
+  async _flyoverRest(gen, dur) {
     const ripPromises = [];
-    for (let k = 0; k < this.instances.length; k++) {
+    for (let k = 1; k < this.instances.length; k++) {
       const inst = this.instances[k];
       ripPromises.push(new Promise((resolve) => { inst._onFinish = resolve; }));
-      const delay = k * X10_RIP_STAGGER; // Welle: vorne zuerst -> nach hinten
+      const delay = (k - 1) * X10_RIP_STAGGER; // Welle, beginnt mit dem Überflug
       this.tweens.add({
         delay, duration: 0.001, onUpdate() {},
         onComplete: () => { if (gen === this._gen) this._playRip(k); },
@@ -201,8 +222,8 @@ export class RevealX10 {
         });
       }
     }
-    // Kamera-Überflug: über ALLE Packs (inkl. dem letzten) bei konstantem Tempo bis ein
-    // Stück HINTER den Stapel (Overshoot) — dort läuft die Fahrt weich aus.
+    // Kamera-Überflug vom ersten bis zum letzten Pack — konstantes Tempo, am Ende weich;
+    // endet DIREKT am letzten Pack (Overshoot-Default 0).
     const endK = (this.instances.length - 1) + X10_FLYOVER_OVERSHOOT;
     const flyover = this._tweenCamera(this._poseOverPack(endK), X10_FLYOVER, gen, flyoverEase);
     await Promise.all([...ripPromises, flyover]);

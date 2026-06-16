@@ -64,7 +64,7 @@ export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 export let X10_STACK_DEPTH = 0.85;           // Tiefen-Versatz pro Pack im Stapel (Weltunits, nach hinten)
 export let X10_STACK_RISE = 0.5;             // Hoch-Versatz pro Pack (Weltunits) -> Oberkanten der hinteren Packs sichtbar
 export let X10_FLYOVER = 1.8;                // Dauer des Kamera-Überflugs über den Stapel (Phase 1, s)
-export let X10_FLYOVER_OVERSHOOT = 1.2;      // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen) -> letztes Pack wird voll überflogen, Auslauf passiert dahinter
+export let X10_FLYOVER_OVERSHOOT = 0;        // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen); 0 = endet direkt am letzten Pack
 export let X10_RIP_STAGGER = 0.16;           // Versatz zwischen den Aufreiß-Starts (Welle vorne->hinten, s)
 export let X10_HOLD_AFTER_RIP = 0.6;         // Halt am Ende von Phase 1, bevor die Karten beginnen (s)
 export let X10_CAM_HEIGHT = 1.0;             // Kamera-Höhe über dem aktuellen Pack (flacher Winkel, ähnlich Einzel-Opening)
