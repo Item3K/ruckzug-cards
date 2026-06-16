@@ -95,6 +95,9 @@ export class RevealX10 {
 
   /** Pro Frame: laufende Rip-Mixer + aktive Beams aktualisieren. */
   update(delta) {
+    // Vor dem Doppeltipp (armiert): Kamera live der aktuellen Pose folgen lassen, damit
+    // man Abstand/Neigung/Höhe schon in der Vorschau sieht (auch beim Tunen).
+    if (this._armed) this._snapCamera(this._poseOverPack(0));
     if (this.instances) {
       for (const inst of this.instances) {
         if (inst.playing && inst.mixer) inst.mixer.update(delta);
