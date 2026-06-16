@@ -1,21 +1,22 @@
-// x10-Öffnen (Phase x10, wie TCG Pocket):
+// x10-Öffnen (Phase x10, wie TCG Pocket) — STRIKT zwei getrennte Phasen:
 //
-// Optik: schräge Aufsicht von leicht OBEN auf einen gestaffelten Pack-STAPEL. Das
-// vorderste Pack ist groß/dominant; dahinter staffeln sich die restlichen Packs nach
-// hinten + oben (man sieht ihre Oberkanten). KEIN Raster, KEINE reine Frontalsicht.
+//   PHASE 1 — ALLE Packs aufreißen (komplett, bevor irgendeine Karte kommt):
+//     Die Kamera fliegt EINMAL über den gestaffelten Stapel (vorne -> hinten). Während
+//     dieses Überflugs reißt ein Pack nach dem anderen auf (Welle, leicht versetzt);
+//     beim Aufreißen erscheint pro Pack sein Beam (silber/gold), falls es etwas
+//     Besonderes hat. KEINE Karten. Am Ende sind alle 10 Packs offen.
 //
-// Ablauf — Pack für Pack NACHEINANDER (kein gemeinsames Aufreißen):
-//  1) Man sieht den gestaffelten Stapel von schräg oben (angled Kamera).
-//  2) Das VORDERSTE Pack reißt auf, sein Beam erscheint nur, wenn es etwas Besonderes
-//     hat. Dann fährt die Kamera frontal heran und die 10 Karten dieses Packs werden
-//     über den CardStack durchgesehen (das offene Pack ist dabei ausgeblendet -> es
-//     hängt NIE ein aufgerissenes Pack neben den Karten).
-//  3) Danach rückt der Stapel ein Pack nach vorne (Kamera zurück in die Aufsicht), das
-//     nächste Pack reißt auf usw. Fortschritt „Pack i/10". Nach dem 10. Auto-Return.
+//   PHASE 2 — Karten durchgehen (erst NACHDEM alle 10 offen sind):
+//     Kamera frontal, Stapel ausgeblendet. Dann nacheinander Pack 1..10 je 10 Karten
+//     über den CardStack (wie Einzel-Opening). Kein Aufreißen/Kamera-Fahren mehr.
+//     Fortschritt „Pack i/10 · Karte r/10". Nach Pack 10 Auto-Return.
+//
+// Optik: schräge Aufsicht von leicht oben auf den gestaffelten Tiefen-Stapel (vorderstes
+// Pack groß, dahinter nach hinten+oben gestaffelt -> Oberkanten sichtbar).
 //
 // Performance: Pack-GLB EINMAL laden, 10x klonen (geteilte Geometrie/Texturen; pro
 // Instanz eigene Materialien nur für die Opazität). Karten teilen das filet-Template.
-// Wiederverwendet: cardStack, ui, tweens. Beam: eigene Instanz pro besonderem Pack.
+// Wiederverwendet: cardStack, ui, tweens. Beam: eigene Instanz je besonderem Pack.
 
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -36,7 +37,8 @@ import {
   AUTO_RETURN_DELAY,
   X10_STACK_DEPTH,
   X10_STACK_RISE,
-  X10_ADVANCE,
+  X10_FLYOVER,
+  X10_RIP_STAGGER,
   X10_HOLD_AFTER_RIP,
   X10_CAM_HEIGHT,
   X10_CAM_LOOK_Y,
@@ -67,7 +69,7 @@ export class RevealX10 {
     this._beams = [];
     this._base = null;           // { scene, center, scale, clip, clipDur }
     this._baseUrl = null;
-    this._camTarget = new THREE.Vector3(0, 0, 0); // aktueller lookAt der Kamera
+    this._camTarget = new THREE.Vector3(0, 0, 0);
     this._returnTimer = null;
     this._waitTimer = null;
     this._waitResolve = null;
@@ -102,7 +104,7 @@ export class RevealX10 {
     }
     if (!this.active) return;
     this._buildStack();
-    this._snapCamera(this._angledPose()); // sofort die schräge Aufsicht einnehmen
+    this._snapCamera(this._poseOverPack(0)); // Start: Aufsicht auf das vorderste Pack
 
     let result;
     try {
@@ -119,43 +121,57 @@ export class RevealX10 {
   }
 
   async _run() {
-    for (let i = 0; i < this.instances.length; i++) {
+    await this._phase1RipAll();    // PHASE 1: Überflug + alle Packs aufreißen
+    if (!this.active) return;
+    await this._toCardsView();     // Übergang: Kamera frontal + Stapel ausblenden
+    if (!this.active) return;
+    for (let i = 0; i < this.instances.length; i++) { // PHASE 2: alle Kartenblöcke
       if (!this.active) return;
-      this._setStackVisible(i);    // nur Pack i..9 sichtbar (i vorne), bereits durch < i aus
-      await this._ripFront(i);     // vorderstes Pack reißt auf (+ Beam), kurz halten
-      if (!this.active) return;
-      await this._revealCards(i);  // Kamera frontal; restl. Stapel AUS; nur Karten
-      if (!this.active) return;
-      if (i < this.instances.length - 1) await this._advanceToNext(i); // Kamera zurück + Stapel vor
+      await this._revealCards(i);
     }
     this._finish();
   }
 
-  /** Sichtbarkeit der Pack-Reihe: ab Index `from` sichtbar, davor (verbraucht) aus. */
-  _setStackVisible(from) {
-    this.instances.forEach((inst, j) => { inst.holder.visible = j >= from; });
-  }
-
-  /** Das vorderste Pack (Index i) reißt auf; Beam nur, wenn es etwas Besonderes hat. */
-  async _ripFront(i) {
-    const inst = this.instances[i];
+  // === PHASE 1: Überflug + Wellen-Aufreißen aller Packs =====================
+  async _phase1RipAll() {
     const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
-    const ripDone = new Promise((resolve) => { inst._onFinish = resolve; });
-    this._playRip(i);
-    const stage = this.packsData[i].beam_stage;
-    if (stage && stage !== 'normal') {
+    const ripPromises = [];
+    for (let k = 0; k < this.instances.length; k++) {
+      const inst = this.instances[k];
+      ripPromises.push(new Promise((resolve) => { inst._onFinish = resolve; }));
+      const delay = k * X10_RIP_STAGGER; // Welle: vorne zuerst -> nach hinten
       this.tweens.add({
-        delay: dur * 0.35, duration: 0.001, onUpdate() {},
-        onComplete: () => { if (this.active) this._showBeam(stage); },
+        delay, duration: 0.001, onUpdate() {},
+        onComplete: () => { if (this.active) this._playRip(k); },
       });
+      const stage = this.packsData[k].beam_stage;
+      if (stage && stage !== 'normal') {
+        this.tweens.add({
+          delay: delay + dur * 0.35, duration: 0.001, onUpdate() {},
+          onComplete: () => { if (this.active) this._showBeamAt(k, stage); },
+        });
+      }
     }
-    await ripDone;
-    await this._wait(X10_HOLD_AFTER_RIP); // kurz die offene Packung + Beam zeigen
+    // Kamera-Überflug vom vordersten zum hintersten Pack (parallel zur Welle).
+    const flyover = this._tweenCamera(this._poseOverPack(this.instances.length - 1), X10_FLYOVER);
+    await Promise.all([...ripPromises, flyover]);
+    await this._wait(X10_HOLD_AFTER_RIP); // kurz alle offenen Packs zeigen
   }
 
-  /** Kamera frontal heranfahren, das offene Pack ausblenden und die 10 Karten zeigen. */
+  /** Übergang Phase 1 -> Phase 2: Kamera frontal + den (offenen) Stapel ausblenden. */
+  async _toCardsView() {
+    const insts = this.instances;
+    const camP = this._tweenCamera(this._frontalPose(), X10_CAM_MOVE);
+    this.tweens.add({
+      duration: PACK_FADE_DURATION,
+      onUpdate: (p) => { for (const inst of insts) this._setInstOpacity(inst, 1 - p); },
+      onComplete: () => { if (this.stackGroup) this.stackGroup.visible = false; },
+    });
+    await camP;
+  }
+
+  // === PHASE 2: Karten durchgehen ===========================================
   async _revealCards(i) {
-    const inst = this.instances[i];
     const total = this.instances.length;
     const cards = this.packsData[i].drawn_cards.map((c) => ({
       ...c, assetUrl: resolveSetAsset(c.set_id, c.asset),
@@ -167,17 +183,6 @@ export class RevealX10 {
     this.cardStack.onDone = () => { if (this._blockResolve) this._blockResolve(); };
     this.cardStack.onProgress = (r, t) =>
       this.ui.setStatus(`Pack ${i + 1}/${total} · Karte ${Math.min(r + 1, t)}/${t}`);
-
-    // Restlichen Stapel sofort ausblenden -> es hängt KEIN weiteres Pack neben den Karten.
-    this.instances.forEach((other, j) => { if (j !== i) other.holder.visible = false; });
-
-    // Kamera in die Frontalsicht (für die Karten) + offenes Pack ausblenden (parallel).
-    this._tweenCamera(this._frontalPose(), X10_CAM_MOVE);
-    this.tweens.add({
-      duration: PACK_FADE_DURATION,
-      onUpdate: (p) => this._setInstOpacity(inst, 1 - p),
-      onComplete: () => this._setInstOpacity(inst, 0),
-    });
 
     this.cardStack.begin();
     this.cardStack.enableInput();
@@ -197,41 +202,66 @@ export class RevealX10 {
     this.cardStack.dispose();
   }
 
-  /** Kamera zurück in die Aufsicht, kommende (geschlossene) Packs zeigen, Stapel vorrücken. */
-  async _advanceToNext(i) {
-    // Pack i ist verbraucht (bleibt aus); die folgenden wieder einblenden.
-    this.instances.forEach((inst, j) => { inst.holder.visible = j > i; });
-    await Promise.all([
-      this._tweenCamera(this._angledPose(), X10_CAM_MOVE),
-      this._advanceStack(),
-    ]);
+  // === Bausteine ============================================================
+  _playRip(k) {
+    const inst = this.instances[k];
+    if (!inst.action) { // kein Clip -> sofort "fertig"
+      const cb = inst._onFinish; inst._onFinish = null;
+      if (cb) cb();
+      return;
+    }
+    inst.action.reset();
+    inst.action.paused = false;
+    inst.action.setLoop(THREE.LoopOnce, 1);
+    inst.action.clampWhenFinished = true;
+    inst.action.timeScale = PACK_OPEN_TIMESCALE;
+    inst.action.play();
+    inst.playing = true;
   }
 
-  _advanceStack() {
+  /** Beam an Pack k (Stapel steht fest im Ursprung -> Position aus dem Stapel-Layout). */
+  _showBeamAt(k, stage) {
+    const beam = new Beam(this.scene, this.camera);
+    const ripPos = new THREE.Vector3(
+      PACK_VIEW_HEIGHT * BEAM_RIP_X_FACTOR,
+      k * X10_STACK_RISE + PACK_VIEW_HEIGHT * BEAM_RIP_HEIGHT_FACTOR,
+      -k * X10_STACK_DEPTH,
+    );
+    beam.show(stage, ripPos, PACK_VIEW_HEIGHT);
+    this._beams.push(beam);
+  }
+
+  _setInstOpacity(inst, op) {
+    inst.holder.traverse((node) => {
+      if (!node.isMesh) return;
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      for (const m of mats) {
+        if (!m) continue;
+        m.transparent = true;
+        m.opacity = op;
+        m.depthWrite = op >= 0.99;
+      }
+    });
+    inst.holder.visible = op > 0.001;
+  }
+
+  _wait(seconds) {
     return new Promise((resolve) => {
-      const g = this.stackGroup;
-      const from = g.position.clone();
-      const to = from.clone().add(new THREE.Vector3(0, -X10_STACK_RISE, X10_STACK_DEPTH));
-      this.tweens.add({
-        duration: X10_ADVANCE,
-        ease: easeInOutCubic,
-        onUpdate: (p) => { g.position.lerpVectors(from, to, p); },
-        onComplete: resolve,
-      });
+      this._waitResolve = resolve;
+      this._waitTimer = setTimeout(() => { this._waitTimer = null; resolve(); }, seconds * 1000);
     });
   }
 
-  // --- Kamera (schräge Aufsicht <-> frontal) --------------------------------
+  // === Kamera ===============================================================
   _frontalPose() {
     return { pos: new THREE.Vector3(0, 0, CAMERA_DISTANCE), target: new THREE.Vector3(0, 0, 0) };
   }
 
-  _angledPose() {
-    // Von leicht oben auf den Stapel blicken (der nach hinten + oben staffelt).
-    return {
-      pos: new THREE.Vector3(0, X10_CAM_HEIGHT, CAMERA_DISTANCE),
-      target: new THREE.Vector3(0, X10_CAM_LOOK_Y, -X10_STACK_DEPTH * 1.5),
-    };
+  /** Schräge Aufsicht über Pack k: konstant CAMERA_DISTANCE davor und CAM_HEIGHT darüber. */
+  _poseOverPack(k) {
+    const target = new THREE.Vector3(0, k * X10_STACK_RISE + X10_CAM_LOOK_Y, -k * X10_STACK_DEPTH);
+    const pos = target.clone().add(new THREE.Vector3(0, X10_CAM_HEIGHT, CAMERA_DISTANCE));
+    return { pos, target };
   }
 
   _snapCamera(pose) {
@@ -263,56 +293,7 @@ export class RevealX10 {
     });
   }
 
-  _playRip(i) {
-    const inst = this.instances[i];
-    if (!inst.action) { // kein Clip -> sofort "fertig"
-      const cb = inst._onFinish; inst._onFinish = null;
-      if (cb) cb();
-      return;
-    }
-    inst.action.reset();
-    inst.action.paused = false;
-    inst.action.setLoop(THREE.LoopOnce, 1);
-    inst.action.clampWhenFinished = true;
-    inst.action.timeScale = PACK_OPEN_TIMESCALE;
-    inst.action.play();
-    inst.playing = true;
-  }
-
-  /** Beam am vordersten Pack (steht durch das Vorrücken stets im Ursprung). */
-  _showBeam(stage) {
-    const beam = new Beam(this.scene, this.camera);
-    const ripPos = new THREE.Vector3(
-      PACK_VIEW_HEIGHT * BEAM_RIP_X_FACTOR,
-      PACK_VIEW_HEIGHT * BEAM_RIP_HEIGHT_FACTOR,
-      0,
-    );
-    beam.show(stage, ripPos, PACK_VIEW_HEIGHT);
-    this._beams.push(beam);
-  }
-
-  _setInstOpacity(inst, op) {
-    inst.holder.traverse((node) => {
-      if (!node.isMesh) return;
-      const mats = Array.isArray(node.material) ? node.material : [node.material];
-      for (const m of mats) {
-        if (!m) continue;
-        m.transparent = true;
-        m.opacity = op;
-        m.depthWrite = op >= 0.99;
-      }
-    });
-    inst.holder.visible = op > 0.001;
-  }
-
-  _wait(seconds) {
-    return new Promise((resolve) => {
-      this._waitResolve = resolve;
-      this._waitTimer = setTimeout(() => { this._waitTimer = null; resolve(); }, seconds * 1000);
-    });
-  }
-
-  // --- Pack-Stapel (laden / klonen / aufräumen) -----------------------------
+  // === Pack-Stapel (laden / klonen / aufräumen) =============================
   async _ensureBase(url) {
     if (this._base && this._baseUrl === url) return;
     this._disposeBase();
@@ -330,9 +311,9 @@ export class RevealX10 {
   }
 
   /**
-   * 10 Packs als Stapel in die Tiefe: vorderstes (k=0) im Ursprung (groß), die hinteren
-   * je weiter nach hinten (-z) und oben (+y) -> man sieht ihre Oberkanten. Durch das
-   * spätere Vorrücken steht das jeweils aktuelle Pack immer im Ursprung.
+   * 10 Packs als fester Stapel in die Tiefe: vorderstes (k=0) im Ursprung (groß), die
+   * hinteren je weiter nach hinten (-z) und oben (+y) -> Oberkanten sichtbar. Der Stapel
+   * bewegt sich NICHT (Phase 1 fliegt die Kamera darüber; Phase 2 blendet ihn aus).
    */
   _buildStack() {
     this._disposeStack();
@@ -430,8 +411,7 @@ export class RevealX10 {
     for (const b of this._beams) b.dispose();
     this._beams = [];
     this._disposeStack();
-    // Kamera für Einzel-Opening/andere Views wieder frontal stellen.
-    this._snapCamera(this._frontalPose());
+    this._snapCamera(this._frontalPose()); // Kamera für Einzel-Opening wieder frontal
     this.result = null;
     this.packsData = null;
   }

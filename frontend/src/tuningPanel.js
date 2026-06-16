@@ -55,9 +55,10 @@ const GROUPS = {
     ['X10_STACK_RISE', 0, 1.2, 0.02, 'Stapel-Hochversatz'],
     ['X10_CAM_HEIGHT', 0, 7, 0.1, 'Kamera von oben'],
     ['X10_CAM_LOOK_Y', -1, 3, 0.1, 'Blickziel-Höhe'],
-    ['X10_CAM_MOVE', 0.1, 1.5, 0.05, 'Kamera-Übergang'],
-    ['X10_ADVANCE', 0.1, 1.2, 0.05, 'Vorrück-Tempo'],
-    ['X10_HOLD_AFTER_RIP', 0, 2.5, 0.1, 'Halt nach Aufreißen'],
+    ['X10_FLYOVER', 0.5, 5, 0.1, 'Überflug-Tempo'],
+    ['X10_RIP_STAGGER', 0, 0.5, 0.01, 'Aufreiß-Welle'],
+    ['X10_CAM_MOVE', 0.1, 1.5, 0.05, 'Übergang zu Karten'],
+    ['X10_HOLD_AFTER_RIP', 0, 2.5, 0.1, 'Halt vor Karten'],
   ],
 };
 
