@@ -67,9 +67,9 @@ export let X10_FLYOVER = 1.8;                // Dauer des Kamera-Überflugs übe
 export let X10_FLYOVER_OVERSHOOT = 0;        // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen); 0 = endet direkt am letzten Pack
 export let X10_RIP_STAGGER = 0.16;           // Versatz zwischen den Aufreiß-Starts (Welle vorne->hinten, s)
 export let X10_HOLD_AFTER_RIP = 0.6;         // Halt am Ende von Phase 1, bevor die Karten beginnen (s)
-export let X10_CAM_DIST = 8.0;               // Abstand der Kamera zur aktuellen Pack-Position (gilt auch VOR dem Überflug)
-export let X10_CAM_ANGLE_DEG = 8;            // vertikaler Kamerawinkel in Grad (0 = frontal, größer = mehr von oben)
-export let X10_CAM_LOOK_Y = 0.2;             // Blickziel-Höhe (in den Stapel hinein) bei der Aufsicht
+export let X10_CAM_DIST = 8.0;               // Abstand der Kamera vor dem Pack (gilt auch VOR dem Überflug)
+export let X10_CAM_ANGLE_DEG = 8;            // Kamera-Neigung (Pitch) in Grad — Drehung um die EIGENE Achse (Pivot in der Kamera, wie Blender); 0 = geradeaus, größer = nach unten
+export let X10_CAM_LOOK_Y = 0.4;             // Kamera-Höhe über der Pack-Position
 export let X10_CAM_MOVE = 0.6;               // Dauer des Kamera-Übergangs Stapel-Aufsicht -> Karten-Frontalsicht (s)
 
 // --- Bedienung --------------------------------------------------------------

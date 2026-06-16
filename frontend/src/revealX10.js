@@ -87,7 +87,6 @@ export class RevealX10 {
     this._beams = [];
     this._base = null;           // { scene, center, scale, clip, clipDur }
     this._baseUrl = null;
-    this._camTarget = new THREE.Vector3(0, 0, 0);
     this._returnTimer = null;
     this._waitTimer = null;
     this._waitResolve = null;
@@ -327,31 +326,31 @@ export class RevealX10 {
   }
 
   // === Kamera ===============================================================
+  // Modell: Kamera-POSITION + eigene ROTATION (Pitch um die Kamera-Achse, „origin in der
+  // Kamera" wie in Blender) — KEIN lookAt aufs Pack (kein Orbit). frontal = identity.
   _frontalPose() {
-    return { pos: new THREE.Vector3(0, 0, CAMERA_DISTANCE), target: new THREE.Vector3(0, 0, 0) };
+    return { pos: new THREE.Vector3(0, 0, CAMERA_DISTANCE), quat: new THREE.Quaternion() };
   }
 
-  /** Schräge Aufsicht über Pack k: Abstand X10_CAM_DIST, vertikaler Winkel X10_CAM_ANGLE_DEG. */
+  /** Kamera vor Pack k (Abstand X10_CAM_DIST, Höhe X10_CAM_LOOK_Y), um X10_CAM_ANGLE_DEG geneigt. */
   _poseOverPack(k) {
-    const target = new THREE.Vector3(0, k * X10_STACK_RISE + X10_CAM_LOOK_Y, -k * X10_STACK_DEPTH);
-    const th = THREE.MathUtils.degToRad(X10_CAM_ANGLE_DEG);
-    const pos = target.clone().add(
-      new THREE.Vector3(0, X10_CAM_DIST * Math.sin(th), X10_CAM_DIST * Math.cos(th)),
-    );
-    return { pos, target };
+    const pos = new THREE.Vector3(0, k * X10_STACK_RISE + X10_CAM_LOOK_Y, -k * X10_STACK_DEPTH + X10_CAM_DIST);
+    // Pitch um die eigene X-Achse: negativ = nach unten neigen (Pivot in der Kamera).
+    const e = new THREE.Euler(THREE.MathUtils.degToRad(-X10_CAM_ANGLE_DEG), 0, 0, 'XYZ');
+    const quat = new THREE.Quaternion().setFromEuler(e);
+    return { pos, quat };
   }
 
   _snapCamera(pose) {
     this.camera.position.copy(pose.pos);
     this.camera.up.set(0, 1, 0);
-    this._camTarget.copy(pose.target);
-    this.camera.lookAt(this._camTarget);
+    this.camera.quaternion.copy(pose.quat);
   }
 
   _tweenCamera(pose, dur, gen, ease = easeInOutCubic, delay = 0) {
     return new Promise((resolve) => {
       const fromPos = this.camera.position.clone();
-      const fromTarget = this._camTarget.clone();
+      const fromQuat = this.camera.quaternion.clone();
       this.tweens.add({
         duration: dur,
         delay,
@@ -359,14 +358,12 @@ export class RevealX10 {
         onUpdate: (p) => {
           if (gen !== this._gen) return; // nach Abbruch die Kamera NICHT mehr bewegen
           this.camera.position.lerpVectors(fromPos, pose.pos, p);
-          this._camTarget.lerpVectors(fromTarget, pose.target, p);
-          this.camera.lookAt(this._camTarget);
+          this.camera.quaternion.slerpQuaternions(fromQuat, pose.quat, p);
         },
         onComplete: () => {
           if (gen === this._gen) {
             this.camera.position.copy(pose.pos);
-            this._camTarget.copy(pose.target);
-            this.camera.lookAt(this._camTarget);
+            this.camera.quaternion.copy(pose.quat);
           }
           resolve(); // immer auflösen, damit await nicht hängt (_run bricht per gen ab)
         },
