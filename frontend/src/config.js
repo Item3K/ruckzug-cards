@@ -67,9 +67,9 @@ export let X10_FLYOVER = 1.8;                // Dauer des Kamera-Überflugs übe
 export let X10_FLYOVER_OVERSHOOT = 0;        // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen); 0 = endet direkt am letzten Pack
 export let X10_RIP_STAGGER = 0.16;           // Versatz zwischen den Aufreiß-Starts (Welle vorne->hinten, s)
 export let X10_HOLD_AFTER_RIP = 0.6;         // Halt am Ende von Phase 1, bevor die Karten beginnen (s)
-export let X10_CAM_HEIGHT = 0.5;             // Kamera-Höhe über dem aktuellen Pack (flacher Winkel, ähnlich Einzel-Opening)
+export let X10_CAM_DIST = 8.0;               // Abstand der Kamera zur aktuellen Pack-Position (gilt auch VOR dem Überflug)
+export let X10_CAM_ANGLE_DEG = 8;            // vertikaler Kamerawinkel in Grad (0 = frontal, größer = mehr von oben)
 export let X10_CAM_LOOK_Y = 0.2;             // Blickziel-Höhe (in den Stapel hinein) bei der Aufsicht
-export let X10_CAM_BACK = 2.0;               // zusätzlicher Kamera-Abstand zum Stapel (weiter hinten = mehr Übersicht)
 export let X10_CAM_MOVE = 0.6;               // Dauer des Kamera-Übergangs Stapel-Aufsicht -> Karten-Frontalsicht (s)
 
 // --- Bedienung --------------------------------------------------------------
@@ -90,7 +90,7 @@ export const TUNING_DEFAULTS = Object.freeze({
   CAMERA_FOV, CAMERA_DISTANCE, PACK_VIEW_HEIGHT, CARD_VIEW_HEIGHT,
   PACK_OPEN_TIMESCALE, PACK_FADE_DURATION,
   X10_STACK_DEPTH, X10_STACK_RISE, X10_FLYOVER, X10_FLYOVER_OVERSHOOT,
-  X10_RIP_STAGGER, X10_HOLD_AFTER_RIP, X10_CAM_HEIGHT, X10_CAM_LOOK_Y, X10_CAM_BACK, X10_CAM_MOVE,
+  X10_RIP_STAGGER, X10_HOLD_AFTER_RIP, X10_CAM_DIST, X10_CAM_ANGLE_DEG, X10_CAM_LOOK_Y, X10_CAM_MOVE,
   DOUBLE_TAP_MS, AUTO_RETURN_DELAY,
 });
 
@@ -133,9 +133,9 @@ const _setters = {
   X10_FLYOVER_OVERSHOOT: (v) => { X10_FLYOVER_OVERSHOOT = v; },
   X10_RIP_STAGGER: (v) => { X10_RIP_STAGGER = v; },
   X10_HOLD_AFTER_RIP: (v) => { X10_HOLD_AFTER_RIP = v; },
-  X10_CAM_HEIGHT: (v) => { X10_CAM_HEIGHT = v; },
+  X10_CAM_DIST: (v) => { X10_CAM_DIST = v; },
+  X10_CAM_ANGLE_DEG: (v) => { X10_CAM_ANGLE_DEG = v; },
   X10_CAM_LOOK_Y: (v) => { X10_CAM_LOOK_Y = v; },
-  X10_CAM_BACK: (v) => { X10_CAM_BACK = v; },
   X10_CAM_MOVE: (v) => { X10_CAM_MOVE = v; },
   DOUBLE_TAP_MS: (v) => { DOUBLE_TAP_MS = v; },
   AUTO_RETURN_DELAY: (v) => { AUTO_RETURN_DELAY = v; },

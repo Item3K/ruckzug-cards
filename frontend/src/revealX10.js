@@ -41,9 +41,9 @@ import {
   X10_FLYOVER_OVERSHOOT,
   X10_RIP_STAGGER,
   X10_HOLD_AFTER_RIP,
-  X10_CAM_HEIGHT,
+  X10_CAM_DIST,
+  X10_CAM_ANGLE_DEG,
   X10_CAM_LOOK_Y,
-  X10_CAM_BACK,
   X10_CAM_MOVE,
 } from './config.js';
 
@@ -162,14 +162,15 @@ export class RevealX10 {
     // (active reicht nicht — eine neue Session setzt active wieder auf true).
 
     // Server-Call JETZT (beim Doppeltipp): würfeln, Sanduhren abziehen, Karten gutschreiben
-    // — wie beim Einzel-Opening. Parallel reißt schon das erste Pack auf (responsiv).
+    // — wie beim Einzel-Opening. Das erste Pack reißt sofort auf (responsiv, Welle beginnt hier).
     const resultP = openPackX10(this._packId);
     resultP.catch(() => {});
 
     const dur = this._base.clipDur > 0 ? this._base.clipDur / PACK_OPEN_TIMESCALE : 0;
     const t0 = performance.now();
-    const rip0 = new Promise((resolve) => { this.instances[0]._onFinish = resolve; });
-    this._playRip(0); // erstes Pack reißt auf (Kamera ist auf Pack 0)
+    const elapsed = () => (performance.now() - t0) / 1000;
+    const ripPromises = [new Promise((resolve) => { this.instances[0]._onFinish = resolve; })];
+    this._playRip(0); // PACK 0: die Aufreißwelle beginnt mit dem ersten Pack
 
     let result;
     try { result = await resultP; }
@@ -178,21 +179,34 @@ export class RevealX10 {
     this.result = result;
     this.packsData = result.packs;
 
-    // Beam des ersten Packs zur Riss-Zeit (~35 % der Rip-Dauer ab Rip-Start).
-    const stage0 = this.packsData[0].beam_stage;
-    if (stage0 && stage0 !== 'normal') {
-      const elapsed = (performance.now() - t0) / 1000;
+    // Restliche Packs als FORTLAUFENDE Welle (Anker = Start von Pack 0, also durchgehend).
+    for (let k = 1; k < this.instances.length; k++) {
+      const inst = this.instances[k];
+      ripPromises.push(new Promise((resolve) => { inst._onFinish = resolve; }));
       this.tweens.add({
-        delay: Math.max(0, dur * 0.35 - elapsed), duration: 0.001, onUpdate() {},
-        onComplete: () => { if (gen === this._gen) this._showBeamAt(0, stage0); },
+        delay: Math.max(0, k * X10_RIP_STAGGER - elapsed()), duration: 0.001, onUpdate() {},
+        onComplete: () => { if (gen === this._gen) this._playRip(k); },
       });
     }
-    await rip0;                              // erstes Pack offen
-    if (gen !== this._gen) return;
-    await this._wait(X10_HOLD_AFTER_RIP);    // Beam des ersten Packs sehen, BEVOR der Überflug startet
-    if (gen !== this._gen) return;
+    // Beams aller besonderen Packs (inkl. dem ersten) zur jeweiligen Riss-Zeit.
+    for (let k = 0; k < this.instances.length; k++) {
+      const stage = this.packsData[k].beam_stage;
+      if (stage && stage !== 'normal') {
+        this.tweens.add({
+          delay: Math.max(0, k * X10_RIP_STAGGER + dur * 0.35 - elapsed()), duration: 0.001, onUpdate() {},
+          onComplete: () => { if (gen === this._gen) this._showBeamAt(k, stage); },
+        });
+      }
+    }
+    // Kamera-Überflug: startet leicht verzögert (nach dem ersten Beam), gleichmäßig, am
+    // Ende weich; endet DIREKT am letzten Pack (Overshoot-Default 0).
+    const endK = (this.instances.length - 1) + X10_FLYOVER_OVERSHOOT;
+    const flyDelay = Math.max(0, dur * 0.35 - elapsed());
+    const flyover = this._tweenCamera(this._poseOverPack(endK), X10_FLYOVER, gen, flyoverEase, flyDelay);
 
-    await this._flyoverRest(gen, dur);       // jetzt erst der Überflug über die restlichen Packs
+    await Promise.all([...ripPromises, flyover]);
+    if (gen !== this._gen) return;
+    await this._wait(X10_HOLD_AFTER_RIP);    // kurz alle offenen Packs zeigen
     if (gen !== this._gen) return;
     await this._toCardsView(gen);            // Übergang: Kamera frontal + Stapel ausblenden
     if (gen !== this._gen) return;
@@ -202,33 +216,6 @@ export class RevealX10 {
     }
     if (gen !== this._gen) return;
     this._finish();
-  }
-
-  // === PHASE 1b: Überflug über die restlichen Packs (1..letztes) + Welle =====
-  async _flyoverRest(gen, dur) {
-    const ripPromises = [];
-    for (let k = 1; k < this.instances.length; k++) {
-      const inst = this.instances[k];
-      ripPromises.push(new Promise((resolve) => { inst._onFinish = resolve; }));
-      const delay = (k - 1) * X10_RIP_STAGGER; // Welle, beginnt mit dem Überflug
-      this.tweens.add({
-        delay, duration: 0.001, onUpdate() {},
-        onComplete: () => { if (gen === this._gen) this._playRip(k); },
-      });
-      const stage = this.packsData[k].beam_stage;
-      if (stage && stage !== 'normal') {
-        this.tweens.add({
-          delay: delay + dur * 0.35, duration: 0.001, onUpdate() {},
-          onComplete: () => { if (gen === this._gen) this._showBeamAt(k, stage); },
-        });
-      }
-    }
-    // Kamera-Überflug vom ersten bis zum letzten Pack — konstantes Tempo, am Ende weich;
-    // endet DIREKT am letzten Pack (Overshoot-Default 0).
-    const endK = (this.instances.length - 1) + X10_FLYOVER_OVERSHOOT;
-    const flyover = this._tweenCamera(this._poseOverPack(endK), X10_FLYOVER, gen, flyoverEase);
-    await Promise.all([...ripPromises, flyover]);
-    await this._wait(X10_HOLD_AFTER_RIP); // kurz alle offenen Packs zeigen
   }
 
   /** Übergang Phase 1 -> Phase 2: Kamera frontal + ALLE Packs sauber ausblenden. */
@@ -344,10 +331,13 @@ export class RevealX10 {
     return { pos: new THREE.Vector3(0, 0, CAMERA_DISTANCE), target: new THREE.Vector3(0, 0, 0) };
   }
 
-  /** Schräge Aufsicht über Pack k: konstant (CAMERA_DISTANCE+CAM_BACK) davor, CAM_HEIGHT darüber. */
+  /** Schräge Aufsicht über Pack k: Abstand X10_CAM_DIST, vertikaler Winkel X10_CAM_ANGLE_DEG. */
   _poseOverPack(k) {
     const target = new THREE.Vector3(0, k * X10_STACK_RISE + X10_CAM_LOOK_Y, -k * X10_STACK_DEPTH);
-    const pos = target.clone().add(new THREE.Vector3(0, X10_CAM_HEIGHT, CAMERA_DISTANCE + X10_CAM_BACK));
+    const th = THREE.MathUtils.degToRad(X10_CAM_ANGLE_DEG);
+    const pos = target.clone().add(
+      new THREE.Vector3(0, X10_CAM_DIST * Math.sin(th), X10_CAM_DIST * Math.cos(th)),
+    );
     return { pos, target };
   }
 
@@ -358,12 +348,13 @@ export class RevealX10 {
     this.camera.lookAt(this._camTarget);
   }
 
-  _tweenCamera(pose, dur, gen, ease = easeInOutCubic) {
+  _tweenCamera(pose, dur, gen, ease = easeInOutCubic, delay = 0) {
     return new Promise((resolve) => {
       const fromPos = this.camera.position.clone();
       const fromTarget = this._camTarget.clone();
       this.tweens.add({
         duration: dur,
+        delay,
         ease,
         onUpdate: (p) => {
           if (gen !== this._gen) return; // nach Abbruch die Kamera NICHT mehr bewegen
