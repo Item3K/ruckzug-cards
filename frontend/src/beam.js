@@ -44,10 +44,14 @@ export function preloadBeamTextures(renderer) {
 }
 
 // Pro Stufe: Spitzen-Deckkraft und Skalierungs-Faktor (jackpot kräftiger).
+// WICHTIG: peak < 1.0 lassen, damit BEAM_INTENSITY in BEIDE Richtungen wirkt — sonst läge
+// der Beam schon bei Intensität 1 an der Opazitäts-Deckelung (1.0) und ließe sich nicht
+// mehr heller regeln (war der Grund, warum der Gold-Beam mit peak 1.0 nicht reagierte).
+// Die größere Prominenz von jackpot kommt zusätzlich über die Skalierung (1.25).
 const STAGE_PARAMS = {
   normal: { peak: 0.0, scale: 1.0 }, // kaum/kein Beam
-  selten: { peak: 0.85, scale: 1.0 },
-  jackpot: { peak: 1.0, scale: 1.25 },
+  selten: { peak: 0.7, scale: 1.0 },
+  jackpot: { peak: 0.85, scale: 1.25 },
 };
 
 export class Beam {
@@ -134,7 +138,8 @@ export class Beam {
     let opacity;
     if (this.t < RISE) opacity = (this.t / RISE) * this._peak;
     else opacity = this._peak * (1 - (this.t - RISE) / Math.max(0.001, BEAM_DURATION - RISE));
-    this.material.opacity = Math.max(0, opacity);
+    // Opazität hart auf [0,1] begrenzen (höhere _peak-Werte aus BEAM_INTENSITY = volle Deckkraft).
+    this.material.opacity = Math.min(1, Math.max(0, opacity));
 
     // Skalierung: von klein auf groß wachsen lassen.
     const s = (0.6 + 0.6 * p) * this._params.scale;
