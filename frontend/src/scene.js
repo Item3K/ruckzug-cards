@@ -5,6 +5,10 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CAMERA_FOV, CAMERA_DISTANCE } from './config.js';
+import { aspectFitFactor } from './responsive.js';
+
+// Etwas Luft, damit das Objekt im Hochformat nicht exakt randvoll sitzt.
+const FRAMING_MARGIN = 1.1;
 
 const BG_COLOR = 0x0b0d12;
 
@@ -48,13 +52,24 @@ export function createScene(container) {
   // Strg+Mausrad löst sonst BROWSER-Zoom aus (skaliert das DOM, verschiebt Overlays).
   window.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
 
-  // --- Resize (Kamera-Position bleibt, nur Aspect/Renderer) ---
+  // --- Responsive Einpassung: Kamera-Distanz ans Seitenverhältnis anpassen ---
+  // contentAspect > 0 aktiviert das Anpassen (vom Einzel-Opening gesetzt: Pack/Karte).
+  // 0 = aus (z.B. im x10-Modus, der die Kamera selbst steuert) -> Distanz unberührt.
+  let framingAspect = 0;
+  function applyFraming() {
+    if (framingAspect > 0) {
+      camera.position.z = CAMERA_DISTANCE * aspectFitFactor(camera.aspect, framingAspect, FRAMING_MARGIN);
+    }
+  }
+
+  // --- Resize (Kamera-Distanz responsiv, Aspect/Renderer) ---
   function onResize() {
     const w = container.clientWidth;
     const h = container.clientHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    applyFraming(); // bei Drehen/Resize live nachjustieren
   }
   window.addEventListener('resize', onResize);
 
@@ -85,5 +100,15 @@ export function createScene(container) {
     if (b) clock.getDelta(); // aufgelaufene Zeit verwerfen -> kein Sprung
   }
 
-  return { scene, camera, renderer, onFrame, start, setActive };
+  /**
+   * Responsive Kamera-Einpassung setzen. contentAspect = Objekt-Breite/Höhe (Pack/Karte).
+   * 0 schaltet das Anpassen ab (Distanz wird dann nicht mehr automatisch verändert —
+   * z.B. im x10-Modus, der die Kamera selbst kontrolliert).
+   */
+  function setFraming(contentAspect) {
+    framingAspect = contentAspect > 0 ? contentAspect : 0;
+    applyFraming();
+  }
+
+  return { scene, camera, renderer, onFrame, start, setActive, setFraming };
 }

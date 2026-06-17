@@ -107,6 +107,11 @@ async function loadPack(pack) {
   try {
     await viewer.load(pack.file); // rip-GLB aus der Set-Struktur
     rotator.attach(viewer.getRotationTarget());
+    // Responsive Kamera-Distanz: Pack UND Karten teilen die Distanz -> breiteres
+    // Seitenverhältnis von beiden nehmen, damit auf Hochformat keines zu nah ist.
+    const ms = viewer.modelSize;
+    const packAspect = ms.y > 0 ? ms.x / ms.y : 0.6;
+    opening.setFraming(Math.max(packAspect, cardStack.cardAspect || 0.72));
     ui.setStatus('');
     ui.setHint('Doppeltippen zum Öffnen · ziehen zum Drehen');
   } catch (err) {
@@ -165,6 +170,7 @@ function enterOpeningX10(pack) {
   reveal.reset();        // evtl. Einzel-Opening-Reste sauber
   revealX10.reset();
   viewer.dispose();      // kein Einzel-Pack im Bild
+  opening.setFraming(0); // im x10 steuert revealX10 die Kamera selbst -> Auto-Framing aus
   currentPack = pack;
   landing.setActive(false);
   opening.setActive(true);

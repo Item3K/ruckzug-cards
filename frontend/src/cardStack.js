@@ -592,6 +592,7 @@ export class CardStack {
     box = new THREE.Box3().setFromObject(tpl);
     const s3 = box.getSize(v).clone();
     this._baseScale = 1 / Math.max(s3.x, s3.y);
+    this.cardAspect = s3.y > 0 ? s3.x / s3.y : 0.72; // Karten-Breite/Höhe (für responsive Kamera)
 
     tpl.updateMatrixWorld(true);
     if (backMesh && frontMesh) {

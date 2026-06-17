@@ -11,8 +11,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { aspectFitFactor } from './responsive.js';
 
 const loader = new GLTFLoader();
+
+// Auf schmalen (Hochformat-)Screens die Idle-Packs etwas kleiner rendern, damit sie
+// nicht zu groß aus den Kacheln ragen. Etwas Luft via Margin.
+const IDLE_MARGIN = 1.15;
 
 export class IdlePacks {
   constructor() {
@@ -65,6 +70,8 @@ export class IdlePacks {
     camera.near = dist / 100;
     camera.far = dist * 100;
     camera.updateProjectionMatrix();
+    item.baseDist = dist;                                  // Basis-Distanz (Querformat)
+    item.modelAspect = size.y > 0 ? size.x / size.y : 0.6; // Pack-Breite/Höhe (für responsive Distanz)
     scene.add(model);
     item.model = model;
 
@@ -122,6 +129,11 @@ export class IdlePacks {
       r.setViewport(left, bottom, w, h);
       r.setScissor(left, bottom, w, h);
       it.camera.aspect = w / h;
+      // Responsive: auf schmalem Hochformat (Handy) Pack weiter weg -> kleiner in der Kachel.
+      // Treiber ist das VIEWPORT-Verhältnis (Gerät), nicht die Kachelform. Live pro Frame
+      // -> passt sich beim Drehen/Resize sofort an.
+      const vAspect = window.innerWidth / window.innerHeight;
+      it.camera.position.z = it.baseDist * aspectFitFactor(vAspect, it.modelAspect, IDLE_MARGIN);
       it.camera.updateProjectionMatrix();
       r.render(it.scene, it.camera);
     }
