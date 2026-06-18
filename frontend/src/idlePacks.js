@@ -21,7 +21,7 @@ const IDLE_MARGIN = 0.95;
 // Packs etwas TIEFER in die Kachel setzen (sie saßen zu hoch). Anteil der Pack-Höhe.
 // Basis gilt immer; im Hochformat kommt (factor-1)×PORTRAIT zusätzlich nach unten.
 const IDLE_DOWN = 0.1;
-const IDLE_DOWN_PORTRAIT = 1.6;
+const IDLE_DOWN_PORTRAIT = 0.5;
 
 export class IdlePacks {
   constructor() {
