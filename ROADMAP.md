@@ -131,6 +131,12 @@ frontend/public/sets/
 - **Holo & Reverse** brauchen KEIN neues Motiv → derselbe PNG, Effekt per Shader im Browser.
 - **Full Art / Rainbow** sind eigene Motive (echte Neuzeichnungen).
 - Regel (Pokémon-nah): **Holo nur für rares+**, **Reverse Holo breit (auch commons)**.
+- **Anzeige im Kartenalbum (offen, bei Phase 7 mit dem Set-Designer final klären):** Jede
+  Finish-Variante hat eine eigene card_id (Verwaltung/Würfeln/Trading). Wie sie im Album
+  ANGEZEIGT werden, ist noch offen — Tendenz (Lennart): EIN Eintrag pro Motiv, Finishes
+  (normal/holo/reverse) erscheinen beim Anklicken der Karte, statt jede Variante als eigene
+  Kachel (sonst pflastern identische Motive das Album zu). Kollege bevorzugt eigene
+  Einträge. Entscheidung vertagt auf den Album-Bau; ggf. umschaltbar.
 - **Holo-Shader später**: winkelabhängiger Glitzer/Iridescenz. ZWEI Masken-Typen —
   Holo = Motiv glänzt, Reverse = Rahmen/Hintergrund glänzt (alles außer Motiv). Maske =
   simples S/W-Bild pro Karte; ohne Maske glänzt grob alles.
@@ -171,7 +177,7 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
   Opening-Modus (langfristig per Doppelklick nach dem Drehen). Pack-Animationen modular aus
   dem Set-Ordner laden.
 - **Opening-Modus:** der fertige 3D-Flow aus Phase 4.
-- **Dex / Sammlung:** pro Set; eigene Karten sichtbar, fehlende grau mit `?`; pro Karte
+- **Kartenalbum / Sammlung:** pro Set; eigene Karten sichtbar, fehlende grau mit `?`; pro Karte
   Anzeige des Pack-Ursprungs („aus allen“ oder konkretes Pack); Anzeige „wie viele Karten
   hat das Set“. Duplikate ab 10 → UnbelievaBoat-Währung tauschen. Set-Abschluss- und
   set-übergreifende Quest-Belohnungen.
@@ -202,7 +208,7 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
   Dazu ein **UI-Tuning-Panel** (analog zum 3D-Dev-Panel aus 4c, nur Dev-Build): Position,
   Größe, Abstände der UI-Felder live per Regler justierbar, mit Export der Werte. Gilt für
   Landing-Page und später für Dex/Friends/Profil-Ansichten.
-- **Phase 7 — Dex / Sammlung.** Ansicht §8, besessene/fehlende Karten, Pack-Ursprung,
+- **Phase 7 — Kartenalbum / Sammlung.** Ansicht §8, besessene/fehlende Karten, Pack-Ursprung,
   Duplikat-Tausch, Set-/Quest-Belohnungen.
 - **Phase 8 — Discord OAuth.** Ersetzt den user_id-Platzhalter aus Phase 3a; echte
   Anmeldung; Grundlage für Friends & persönliche Daten. **Außerdem hier:** Dev-/Tuning-Panels
@@ -233,6 +239,19 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
 
 ---
 
+- **Phase 15 — PWA & Asset-Caching (Plattform-Strategie).** Die Web-App zur PWA machen:
+  installierbar ("zum Homescreen") auf Android + iOS, Vollbild, App-Icon. Service Worker +
+  Cache Storage laden die schweren Assets (3D-Modelle, Texturen, Sounds) beim ersten Besuch
+  lokal in den Browser-Cache → danach kein Pi-Traffic mehr für Assets, Server liefert nur
+  noch leichte Spieldaten (JSON). Asset-Versionierung pro Set (z.B. "set_ruckzug1 v3") +
+  Content-Update-Logik: bei neuer Version Nachladen erzwingen. Das löst Traffic UND
+  Performance gleichermaßen wie eine native App.
+PLATTFORM-STRATEGIE (Entscheidung): Web-App + PWA, KEINE Store-Apps. Das Projekt ist für
+Lennart und seinen Freundeskreis (privat) — der Store-Aufwand (Apple-Account/Mac/Reviews/
+Gebühren) lohnt nicht. Die PWA deckt alles ab: Link teilen → "zum Homescreen" → App-Icon,
+Vollbild, lokale Assets, auf Android UND iOS. Performance hängt am sauberen 3D (Assets
+teilen/disposen/vorwärmen) + Asset-Caching, NICHT an Browser-vs-native.
+
 ## 10. Tech-Stack (Kurzreferenz)
 - Bot: Python, discord.py, aiosqlite, Docker
 - Web-Backend: Python, FastAPI, sqlite (WAL), Discord OAuth
@@ -250,3 +269,44 @@ Rarität-Stufen: common → rare → ultra rare → rainbow rare.
 - **Wertkarte** — Sonderkarte (Hue-Tokens/Beeren/Muscheln/Kiesel) mit serverseitig
   geprägtem Wert, einlösbar ins Minispiel.
 - **Finish** — Karten-Variante: normal/holo/reverse_holo/full_art/full_art_holo.
+
+
+## Progression-System (Pack-Zähler → Wertkarten → Bracelet → geheimes Reward)
+
+[VERTRAULICH — Endziel nicht öffentlich kommunizieren]
+
+Mehrstufige Langzeit-Progression. Reihenfolge der Umsetzung von unten nach oben:
+
+- **Phase A — Pack-Zähler (jetzt).** Serverseitig pro User Gesamtzahl geöffneter Packs
+  (cards.db, additiv). Hochzählen bei Einzel (+1) und x10 (+10), serverseitig im
+  Würfel-/Verbuchungs-Vorgang (nicht umgehbar). Anzeige im Profil. Grundlage für Quests
+  UND für die Bracelet-Freischaltbedingung.
+
+- **Phase B — Profil-Bereich (Grundgerüst jetzt, Inhalte später).** Klick auf eigenen
+  Discord-Name/Avatar → Profil. Erweiterbar aufbauen. Soll später enthalten:
+  * Top-10-Karten-Schaukasten (von Freunden über Freunde-Tab einsehbar).
+  * Pack-Statistik (geöffnete Packs).
+  * Wertkarten-Einlösung (siehe C).
+  * Primal Essence Bracelet (siehe D).
+
+- **Phase C — Wertkarten-Einlösung (später, braucht echte Wertkarten).** Beeren/Muscheln/
+  Kiesel liegen als Karte mit eingeprägtem Wert im Profil (nur für einen selbst sichtbar).
+  Klick auf die Karte → Zahl eingeben, wieviel davon auf den Discord-Account (UnbelievaBoat-
+  Währung via Bot) übertragen werden soll. Betrag wird von der Karte abgezogen, Restwert neu
+  in die Karte "kompiliert". = Brücke zum Bot (kommt mit/nach Pi-Migration + Bot-Cog).
+
+- **Phase D — Primal Essence Bracelet (später, braucht C).** Craftbares ITEM (keine Karte),
+  herstellbar aus Beeren/Muscheln/Kiesel — aber NUR aus denen, die von KARTEN stammen
+  (nicht aus der Discord-Währung). Im Profil als anklickbares Item unter den Wertkarten.
+  Balancing der Crafting-Kosten noch offen.
+
+- **Phase E — Geheimes Reward (später, Endziel).** Wer >= X Bracelets besitzt UND >= ~100
+  Packs geöffnet hat (genauer Wert TBD), kann gegen einen "Mystery-Gegenstand" eintauschen.
+  = physische, 3D-gedruckte Pokerchips mit Metallkern + Server-Logo. JEDER Quest-Absolvent
+  bekommt ein Set aus 4 Chips (also pro Person 4, nicht 4 insgesamt — kein "die ersten X"-
+  Problem). Soll in ~1-2 Monaten Spielzeit erreichbar sein. WICHTIG: Endziel bleibt geheim
+  (weder was es ist noch Vorab-Ankündigung). Die zugehörigen Karten/Items NICHT tradebar
+  machen (kein Erschleichen/Weiterreichen).
+
+OFFENE BALANCING-/DESIGN-FRAGEN: Bracelet-Crafting-Kosten, benötigte Bracelet-Anzahl,
+Pack-Schwelle, wie "nur Karten-Wertstoffe zählen" technisch von Discord-Währung getrennt wird.
