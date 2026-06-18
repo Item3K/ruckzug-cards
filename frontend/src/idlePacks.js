@@ -16,8 +16,12 @@ import { aspectFitFactor } from './responsive.js';
 const loader = new GLTFLoader();
 
 // Auf schmalen (Hochformat-)Screens die Idle-Packs etwas kleiner rendern, damit sie
-// nicht zu groß aus den Kacheln ragen. Etwas Luft via Margin.
-const IDLE_MARGIN = 1.15;
+// nicht zu groß aus den Kacheln ragen. <1 = mildes Verkleinern (höher = stärker).
+const IDLE_MARGIN = 0.95;
+// Packs etwas TIEFER in die Kachel setzen (sie saßen zu hoch). Anteil der Pack-Höhe.
+// Basis gilt immer; im Hochformat kommt (factor-1)×PORTRAIT zusätzlich nach unten.
+const IDLE_DOWN = 0.1;
+const IDLE_DOWN_PORTRAIT = 1.6;
 
 export class IdlePacks {
   constructor() {
@@ -72,7 +76,13 @@ export class IdlePacks {
     camera.updateProjectionMatrix();
     item.baseDist = dist;                                  // Basis-Distanz (Querformat)
     item.modelAspect = size.y > 0 ? size.x / size.y : 0.6; // Pack-Breite/Höhe (für responsive Distanz)
-    scene.add(model);
+    item.maxDim = maxDim;                                  // für den vertikalen Offset
+    // Modell in einen Holder hängen: der Holder verschiebt vertikal (tiefer), während der
+    // Mixer/die Rotation am Modell selbst bleibt (kein Konflikt mit der Idle-Animation).
+    const holder = new THREE.Group();
+    holder.add(model);
+    scene.add(holder);
+    item.holder = holder;
     item.model = model;
 
     // Idle-Animation abspielen (die GLB rotiert). Fallback: sanfte Y-Drehung.
@@ -133,8 +143,14 @@ export class IdlePacks {
       // Treiber ist das VIEWPORT-Verhältnis (Gerät), nicht die Kachelform. Live pro Frame
       // -> passt sich beim Drehen/Resize sofort an.
       const vAspect = window.innerWidth / window.innerHeight;
-      it.camera.position.z = it.baseDist * aspectFitFactor(vAspect, it.modelAspect, IDLE_MARGIN);
+      const factor = aspectFitFactor(vAspect, it.modelAspect, IDLE_MARGIN);
+      it.camera.position.z = it.baseDist * factor;
       it.camera.updateProjectionMatrix();
+      // Pack tiefer setzen (saß zu hoch); im Hochformat zusätzlich nach unten.
+      if (it.holder) {
+        const down = it.maxDim * (IDLE_DOWN + Math.max(0, factor - 1) * IDLE_DOWN_PORTRAIT);
+        it.holder.position.y = -down;
+      }
       r.render(it.scene, it.camera);
     }
   }
