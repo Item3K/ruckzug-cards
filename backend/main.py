@@ -227,9 +227,13 @@ def profile_stats(request: Request) -> dict:
     user_id = require_user(request)
     with db.connection() as conn:
         row = conn.execute(
-            "SELECT packs_opened FROM user_stats WHERE user_id = ?", (user_id,)
+            "SELECT packs_opened, single_opened FROM user_stats WHERE user_id = ?",
+            (user_id,),
         ).fetchone()
-    return {"packs_opened": row["packs_opened"] if row else 0}
+    return {
+        "packs_opened": row["packs_opened"] if row else 0,
+        "single_opened": row["single_opened"] if row else 0,
+    }
 
 
 # =====================================================================
@@ -371,6 +375,7 @@ def admin_users(request: Request) -> dict:
                    au.last_login AS last_login,
                    COALESCE(h.count, 0) AS hourglasses,
                    COALESCE(s.packs_opened, 0) AS packs_opened,
+                   COALESCE(s.single_opened, 0) AS single_opened,
                    COALESCE((SELECT COUNT(*) FROM user_cards uc
                              WHERE uc.user_id = i.user_id AND uc.count > 0), 0) AS card_count
             FROM ids i
@@ -400,22 +405,45 @@ def admin_user_cards(request: Request, user_id: str) -> dict:
     return {"user_id": user_id, "cards": {r["card_id"]: r["count"] for r in rows}}
 
 
-class AdminUserRequest(BaseModel):
+# Whitelist der setzbaren Statistik-Zähler (Spaltennamen — gegen SQL-Injection).
+_STAT_COUNTERS = {"packs_opened", "single_opened"}
+
+
+class AdminPacksSetRequest(BaseModel):
     user_id: str
+    counter: str = "packs_opened"  # 'packs_opened' (alle) | 'single_opened' (Einzel)
+    value: int = 0                 # Zielwert (>= 0); 0 = zurücksetzen
 
 
-@app.post("/api/admin/packs-reset")
-def admin_packs_reset(req: AdminUserRequest, request: Request) -> dict:
-    """Pack-Zähler eines Users auf 0 zurücksetzen."""
+@app.post("/api/admin/packs-set")
+def admin_packs_set(req: AdminPacksSetRequest, request: Request) -> dict:
+    """Einen Statistik-Zähler eines Users absolut setzen (Zielwert, >= 0).
+
+    counter wählt den Zähler: 'packs_opened' (alle geöffneten Booster) oder
+    'single_opened' (nur Einzel-Booster). value = 0 setzt zurück.
+    """
     require_admin(request)
+    if req.counter not in _STAT_COUNTERS:
+        raise HTTPException(status_code=400, detail=f"Unbekannter Zähler: {req.counter}")
+    value = max(0, int(req.value))
+    col = req.counter  # aus Whitelist — sicher als Spaltenname zu interpolieren
     with db.connection() as conn:
         conn.execute(
-            "INSERT INTO user_stats (user_id, packs_opened, updated_at) "
-            "VALUES (?, 0, datetime('now')) "
-            "ON CONFLICT(user_id) DO UPDATE SET packs_opened = 0, updated_at = datetime('now')",
-            (req.user_id,),
+            f"INSERT INTO user_stats (user_id, {col}, updated_at) "
+            "VALUES (?, ?, datetime('now')) "
+            f"ON CONFLICT(user_id) DO UPDATE SET {col} = excluded.{col}, "
+            "updated_at = datetime('now')",
+            (req.user_id, value),
         )
-    return {"user_id": req.user_id, "packs_opened": 0}
+        row = conn.execute(
+            "SELECT packs_opened, single_opened FROM user_stats WHERE user_id = ?",
+            (req.user_id,),
+        ).fetchone()
+    return {
+        "user_id": req.user_id,
+        "packs_opened": row["packs_opened"] if row else 0,
+        "single_opened": row["single_opened"] if row else 0,
+    }
 
 
 class AdminHourglassesRequest(BaseModel):

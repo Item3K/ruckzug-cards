@@ -54,6 +54,13 @@ def _migrate_post(conn) -> None:
         conn.execute("ALTER TABLE app_users ADD COLUMN avatar TEXT;")
         print("Migration: app_users.avatar ergänzt.")
 
+    stat_cols = {r[1] for r in conn.execute("PRAGMA table_info(user_stats);").fetchall()}
+    if stat_cols and "single_opened" not in stat_cols:
+        conn.execute(
+            "ALTER TABLE user_stats ADD COLUMN single_opened INTEGER NOT NULL DEFAULT 0;"
+        )
+        print("Migration: user_stats.single_opened ergänzt.")
+
 
 def init_db() -> None:
     schema_sql = _SCHEMA_FILE.read_text(encoding="utf-8")

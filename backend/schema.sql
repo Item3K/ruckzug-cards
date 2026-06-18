@@ -132,12 +132,15 @@ CREATE TABLE IF NOT EXISTS app_users (
 
 -- =====================================================================
 -- user_stats — einfache Pro-User-Statistiken (Profil-Grundlage, Phase 9/Quests)
---   Wird serverseitig im selben Vorgang wie das Pack-Öffnen hochgezählt
---   (Einzel +1, x10 +10). Erweiterbar um weitere Statistik-Spalten.
+--   Wird serverseitig im selben Vorgang wie das Pack-Öffnen hochgezählt.
+--   packs_opened  = ALLE geöffneten Booster (Einzel +1, x10 +10).
+--   single_opened = nur Einzel-Booster (+1 je Einzelöffnung; x10 zählt NICHT mit).
+--   Erweiterbar um weitere Statistik-Spalten.
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS user_stats (
     user_id       TEXT PRIMARY KEY,
     packs_opened  INTEGER NOT NULL DEFAULT 0,
+    single_opened INTEGER NOT NULL DEFAULT 0,
     updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -10,7 +10,7 @@
 
 import {
   getMe, adminListUsers, adminUserCards,
-  adminSetHourglasses, adminGiveCard, adminTakeCard, adminResetPacks,
+  adminSetHourglasses, adminGiveCard, adminTakeCard, adminSetPacks,
 } from './api.js';
 import { loadAllSets } from './setLoader.js';
 
@@ -95,10 +95,8 @@ export class Admin {
     usersSection.appendChild(this.usersEl);
     this.body.appendChild(usersSection);
 
-    // Karten-Verwaltung (gefüllt, sobald ein User gewählt ist).
-    this.cardsSection = el('section', 'admin-section');
-    this.body.appendChild(this.cardsSection);
-    this._renderCardPanelEmpty();
+    // Die Karten-Verwaltung klappt inline unter dem jeweiligen User auf.
+    this._openPanel = null;
 
     await this._loadUsers();
   }
@@ -172,23 +170,48 @@ export class Admin {
     meta.appendChild(cc);
     u._ccEl = cc; // Karten-Zähler-Pille (wird nach Geben/Nehmen aktualisiert)
     const packsPill = el('span', 'admin-pill', `📦 ${u.packs_opened ?? 0}`);
+    packsPill.title = 'Alle geöffneten Booster (Einzel + x10)';
     meta.appendChild(packsPill);
+    const singlePill = el('span', 'admin-pill', `🎴 ${u.single_opened ?? 0}`);
+    singlePill.title = 'Nur Einzel-Booster';
+    meta.appendChild(singlePill);
     card.appendChild(meta);
 
-    // Pack-Zähler zurücksetzen.
+    // Pack-Zähler: Zähler wählen, Wert setzen oder auf 0 zurücksetzen.
     const packRow = el('div', 'admin-row');
-    const resetBtn = el('button', 'admin-btn admin-btn-warn', 'Pack-Zähler zurücksetzen');
-    resetBtn.addEventListener('click', async () => {
+    const counterSel = el('select', 'admin-input admin-select');
+    const optAll = el('option', null, 'Alle Packs'); optAll.value = 'packs_opened';
+    const optSingle = el('option', null, 'Single-Booster'); optSingle.value = 'single_opened';
+    counterSel.append(optAll, optSingle);
+    const valOf = (counter) => counter === 'single_opened'
+      ? (u.single_opened ?? 0) : (u.packs_opened ?? 0);
+    const packVal = el('input', 'admin-input admin-input-sm');
+    packVal.type = 'number';
+    packVal.min = '0';
+    packVal.value = String(valOf(counterSel.value));
+    packVal.setAttribute('aria-label', 'Zähler-Wert');
+    // Eingabefeld folgt der Auswahl (zeigt den aktuellen Stand des gewählten Zählers).
+    counterSel.addEventListener('change', () => { packVal.value = String(valOf(counterSel.value)); });
+    const applyPacks = async (value) => {
+      if (Number.isNaN(value)) { this._flash(card, 'Bitte eine Zahl eingeben.', true); return; }
       this._busy(card, true);
       try {
-        const r = await adminResetPacks(u.user_id);
+        const r = await adminSetPacks(u.user_id, counterSel.value, value);
         u.packs_opened = r.packs_opened;
+        u.single_opened = r.single_opened;
         packsPill.textContent = `📦 ${r.packs_opened}`;
-        this._flash(card, 'Pack-Zähler zurückgesetzt.');
+        singlePill.textContent = `🎴 ${r.single_opened}`;
+        packVal.value = String(valOf(counterSel.value));
+        this._flash(card, 'Pack-Zähler aktualisiert.');
       } catch (e) { this._flash(card, e.message || String(e), true); }
       finally { this._busy(card, false); }
-    });
-    packRow.append(el('span', 'admin-label', 'Pack-Zähler'), resetBtn);
+    };
+    const setPackBtn = el('button', 'admin-btn', 'Setzen');
+    setPackBtn.addEventListener('click', () => applyPacks(parseInt(packVal.value, 10)));
+    const zeroPackBtn = el('button', 'admin-btn admin-btn-warn', 'Auf 0');
+    zeroPackBtn.addEventListener('click', () => applyPacks(0));
+    packRow.append(el('span', 'admin-label', 'Pack-Zähler'),
+      counterSel, packVal, setPackBtn, zeroPackBtn);
     card.appendChild(packRow);
 
     // Sanduhren: Betrag + Setzen (absolut) / Addieren (+/-).
@@ -222,10 +245,13 @@ export class Admin {
       this._quickButtons((d) => applyHg('add', d)));
     card.appendChild(hgQuick);
 
-    // Karten verwalten -> öffnet die Karten-Verwaltung für diesen User.
-    const manage = el('button', 'admin-btn admin-btn-primary', 'Karten verwalten →');
-    manage.addEventListener('click', () => this._selectUser(u));
+    // Karten verwalten -> klappt die Verwaltung INLINE unter diesem User auf/zu.
+    const manage = el('button', 'admin-btn admin-btn-primary', 'Karten verwalten ▾');
+    const panel = el('div', 'admin-cardpanel');
+    panel.hidden = true;
+    manage.addEventListener('click', () => this._toggleCardPanel(u, panel, manage));
     card.appendChild(manage);
+    card.appendChild(panel);
 
     const fb = el('div', 'admin-feedback');
     card.appendChild(fb);
@@ -233,35 +259,45 @@ export class Admin {
     return card;
   }
 
-  // --- Karten-Verwaltung ----------------------------------------------------
-  _renderCardPanelEmpty() {
-    this.cardsSection.innerHTML = '';
-    this.cardsSection.appendChild(el('h3', 'admin-h3', 'Karten-Verwaltung'));
-    this.cardsSection.appendChild(el('p', 'admin-msg',
-      'Oben bei einem User „Karten verwalten" wählen.'));
+  // --- Karten-Verwaltung (inline pro User, auf-/zuklappbar) -----------------
+  /** Karten-Panel dieses Users umschalten; ein evtl. anderes offenes wird zugeklappt. */
+  async _toggleCardPanel(u, panel, btn) {
+    if (!panel.hidden) {            // bereits offen -> zuklappen
+      this._collapseCardPanel();
+      return;
+    }
+    this._collapseCardPanel();      // ein anderes offenes Panel zuerst schließen
+    this._openPanel = { panel, btn };
+    btn.textContent = 'Karten verwalten ▴';
+    panel.hidden = false;
+    await this._fillCardPanel(u, panel);
   }
 
-  async _selectUser(u) {
-    this.selectedUser = u;
-    this.cardsSection.innerHTML = '';
-    this.cardsSection.appendChild(el('h3', 'admin-h3', 'Karten-Verwaltung'));
+  /** Das aktuell offene Karten-Panel zuklappen und leeren. */
+  _collapseCardPanel() {
+    const op = this._openPanel;
+    if (!op) return;
+    op.panel.hidden = true;
+    op.panel.innerHTML = '';
+    op.btn.textContent = 'Karten verwalten ▾';
+    this._openPanel = null;
+    this._activePanel = null;
+    this.selectedUser = null;
+  }
 
-    const head = el('div', 'admin-sel-head');
-    const av = el('img', 'admin-avatar');
-    av.alt = '';
-    if (u.avatar_url) av.src = u.avatar_url;
-    head.appendChild(av);
-    head.appendChild(el('span', 'admin-user-name', u.username || u.user_id));
-    this.cardsSection.appendChild(head);
+  async _fillCardPanel(u, panel) {
+    this.selectedUser = u;
+    this._activePanel = panel;
+    panel.innerHTML = '';
 
     const filter = el('input', 'admin-input admin-filter');
     filter.type = 'search';
     filter.placeholder = 'Karte suchen (Name oder ID) …';
     filter.addEventListener('input', () => this._filterCards(filter.value));
-    this.cardsSection.appendChild(filter);
+    panel.appendChild(filter);
 
     const listWrap = el('div', 'admin-cardlist');
-    this.cardsSection.appendChild(listWrap);
+    panel.appendChild(listWrap);
     listWrap.appendChild(el('p', 'admin-msg', 'Lädt Besitz …'));
 
     // Besitz-Anzahlen des Users holen, dann die Kartenliste rendern.
@@ -345,8 +381,10 @@ export class Admin {
   }
 
   _filterCards(q) {
+    const panel = this._activePanel;
+    if (!panel) return;
     const term = q.trim().toLowerCase();
-    for (const group of this.cardsSection.querySelectorAll('.admin-cardgroup')) {
+    for (const group of panel.querySelectorAll('.admin-cardgroup')) {
       let any = false;
       for (const row of group.querySelectorAll('.admin-card')) {
         const match = !term || row.dataset.search.includes(term);

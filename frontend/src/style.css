@@ -723,13 +723,19 @@ canvas {
 .admin-btn-primary { border-color: #2563eb; color: #bfdbfe; }
 .admin-btn-primary:hover { border-color: #3b82f6; background: rgba(37, 99, 235, 0.18); }
 
-/* --- Karten-Verwaltung --- */
-.admin-sel-head {
+/* --- Karten-Verwaltung (inline pro User, auf-/zuklappbar) --- */
+.admin-cardpanel {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  padding: 4px 0;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.45);
 }
+.admin-cardpanel[hidden] { display: none; }
+.admin-select { cursor: pointer; }
 .admin-filter { max-width: none; width: 100%; }
 
 .admin-cardlist { display: flex; flex-direction: column; gap: 14px; }
