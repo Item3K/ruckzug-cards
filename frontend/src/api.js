@@ -28,6 +28,10 @@ export function startLogin() {
 export async function logout() {
   return jsonOrThrow(await fetch('/auth/logout', { method: 'POST' }));
 }
+/** Profil-Statistik des eingeloggten Users: { packs_opened } (erweiterbar). */
+export async function getProfileStats() {
+  return jsonOrThrow(await fetch('/api/profile/stats'));
+}
 
 // --- Spiel ---
 /** Öffnet ein Pack (user_id kommt aus der Session). */

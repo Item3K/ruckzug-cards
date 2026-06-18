@@ -220,6 +220,18 @@ def open_pack_x10(req: OpenPackRequest, request: Request) -> dict:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 
+@app.get("/api/profile/stats")
+def profile_stats(request: Request) -> dict:
+    """Statistik des eingeloggten Users (Profil). Aktuell: Gesamtzahl geöffneter Packs.
+    Bewusst erweiterbar (später z.B. Schaukasten/Wertkarten/Bracelet)."""
+    user_id = require_user(request)
+    with db.connection() as conn:
+        row = conn.execute(
+            "SELECT packs_opened FROM user_stats WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    return {"packs_opened": row["packs_opened"] if row else 0}
+
+
 # =====================================================================
 # User-Verzeichnis & fremde Sammlungen (eingeloggt; Basis für Trading/Freunde)
 # =====================================================================

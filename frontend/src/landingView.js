@@ -27,6 +27,7 @@ export class Landing {
     this.onAuthChange = null;   // (me) => void, gesetzt von main (für die Opening-Gate)
     this.onOpenAdmin = null;    // () => void, gesetzt von main (Admin-Menüpunkt)
     this.onOpenTrading = null;  // () => void, gesetzt von main (Trading-Menüpunkt)
+    this.onOpenProfile = null;  // () => void, gesetzt von main (Klick auf Avatar/Name)
     this.sets = [];
     this._packEls = []; // { setId, pack, progressEl }
     this._setEls = [];  // { set, progressEl }
@@ -52,13 +53,18 @@ export class Landing {
     this._hgLabel = el('span', 'hg-label', '');
     this._hgLabel.hidden = true;
     right.appendChild(this._hgLabel);
-    // Avatar (nur eingeloggt sichtbar) + Username.
+    // Avatar + Username als KLICKBARER Profil-Button (nur eingeloggt sichtbar).
+    this._profileBtn = el('button', 'profile-btn');
+    this._profileBtn.hidden = true;
+    this._profileBtn.setAttribute('aria-label', 'Profil');
     this._avatarImg = el('img', 'avatar-img');
     this._avatarImg.alt = '';
-    this._avatarImg.hidden = true;
-    right.appendChild(this._avatarImg);
     this._userLabel = el('span', 'user-label', ''); // Username, wenn eingeloggt
-    right.appendChild(this._userLabel);
+    this._profileBtn.append(this._avatarImg, this._userLabel);
+    this._profileBtn.addEventListener('click', () => {
+      if (this.me.logged_in && this.onOpenProfile) this.onOpenProfile();
+    });
+    right.appendChild(this._profileBtn);
 
     const burger = el('button', 'hamburger', '≡');
     burger.setAttribute('aria-label', 'Menü');
@@ -123,13 +129,15 @@ export class Landing {
     if (this.me.logged_in) {
       this._userLabel.textContent = this.me.username || 'Angemeldet';
       this._authBtn.textContent = 'Abmelden';
-      if (this.me.avatar_url) { this._avatarImg.src = this.me.avatar_url; this._avatarImg.hidden = false; }
+      if (this.me.avatar_url) this._avatarImg.src = this.me.avatar_url;
+      this._avatarImg.hidden = !this.me.avatar_url;
+      this._profileBtn.hidden = false; // Profil per Klick auf Avatar/Name
       this._hgLabel.textContent = `⌛ ${this.me.hourglasses ?? 0}`;
       this._hgLabel.hidden = false;
     } else {
       this._userLabel.textContent = '';
       this._authBtn.textContent = 'Mit Discord anmelden';
-      this._avatarImg.hidden = true;
+      this._profileBtn.hidden = true;
       this._hgLabel.hidden = true;
     }
     this._adminBtn.hidden = !this.me.is_admin; // Admin-Menüpunkt nur für Admins

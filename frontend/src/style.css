@@ -454,6 +454,22 @@ canvas {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Avatar + Name als klickbarer Profil-Button in der Topbar. */
+.profile-btn {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.profile-btn:hover { background: rgba(148, 163, 184, 0.12); border-color: #334155; }
+.profile-btn[hidden] { display: none; }
 /* Avatar (Discord) in der Topbar. */
 .avatar-img {
   width: 32px;
@@ -953,3 +969,51 @@ canvas {
   border-radius: 10px;
   background: rgba(2, 6, 23, 0.4);
 }
+
+/* ============================================================
+   Profil (Phase 9, Grundgerüst)
+   ============================================================ */
+.profile-view {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #0b0d12;
+}
+.profile-view[hidden] { display: none; }
+
+.profile-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.profile-msg { color: #94a3b8; font-size: 14px; }
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1e293b;
+  border: 1px solid #334155;
+}
+.profile-name { font-size: 22px; font-weight: 700; }
+
+/* Erweiterbare Sektionen (Statistik jetzt; später Schaukasten/Wertkarten/Bracelet). */
+.profile-section {
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.5);
+}
+.profile-stat-label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+.profile-stat-value { font-size: 28px; font-weight: 800; margin-top: 4px; }

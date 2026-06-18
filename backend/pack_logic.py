@@ -121,6 +121,19 @@ def determine_beam_stage(drawn: list[CardDef]) -> str:
     return cfg.BEAM_TIER_TO_STAGE.get(best_tier, cfg.DEFAULT_BEAM)
 
 
+# --- Statistik (Profil/Quests-Grundlage) -------------------------------------
+def _bump_packs_opened(conn, user_id: str, n: int) -> None:
+    """Zähler geöffneter Packs hochzählen — im selben Vorgang wie das Würfeln/Verbuchen,
+    damit er nicht umgangen werden kann (serverseitig, atomar)."""
+    conn.execute(
+        "INSERT INTO user_stats (user_id, packs_opened, updated_at) "
+        "VALUES (?, ?, datetime('now')) "
+        "ON CONFLICT(user_id) DO UPDATE SET "
+        "packs_opened = packs_opened + excluded.packs_opened, updated_at = datetime('now')",
+        (user_id, n),
+    )
+
+
 # --- Orchestrierung mit DB ---------------------------------------------------
 def open_pack(user_id: str, pack_id: str, rng: random.Random | None = None) -> dict:
     """Öffnet ein Pack für einen User. Eine Transaktion, serverseitig."""
@@ -162,7 +175,10 @@ def open_pack(user_id: str, pack_id: str, rng: random.Random | None = None) -> d
                 (user_id, card_id, n),
             )
 
-    # e) Beam-Stufe aus der besten Karte
+        # e) Pack-Zähler +1 (gleiche Transaktion)
+        _bump_packs_opened(conn, user_id, 1)
+
+    # f) Beam-Stufe aus der besten Karte
     beam_stage = determine_beam_stage(drawn)
 
     return {
@@ -236,6 +252,9 @@ def open_pack_multi(user_id: str, pack_id: str, count: int = 10,
                 "count = count + excluded.count, updated_at = datetime('now')",
                 (user_id, card_id, n),
             )
+
+        # Pack-Zähler +count (gleiche Transaktion)
+        _bump_packs_opened(conn, user_id, count)
 
     # c) Antwort: pro Päckchen die Karten + eigene Beam-Stufe.
     return {

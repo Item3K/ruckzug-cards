@@ -131,6 +131,17 @@ CREATE TABLE IF NOT EXISTS app_users (
 );
 
 -- =====================================================================
+-- user_stats — einfache Pro-User-Statistiken (Profil-Grundlage, Phase 9/Quests)
+--   Wird serverseitig im selben Vorgang wie das Pack-Öffnen hochgezählt
+--   (Einzel +1, x10 +10). Erweiterbar um weitere Statistik-Spalten.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS user_stats (
+    user_id       TEXT PRIMARY KEY,
+    packs_opened  INTEGER NOT NULL DEFAULT 0,
+    updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- =====================================================================
 -- trades — Mehrkarten-Tausch zwischen zwei Usern (Phase 9b, Website)
 --   from_user (A) bietet 1–5 Karten; to_user (B) gibt 1–5 Karten. Die konkreten
 --   Karten stehen in trade_items (eine Zeile je Karte+Seite), NICHT mehr als

@@ -15,6 +15,7 @@ import { DragRotator } from './dragRotator.js';
 import { Landing } from './landingView.js';
 import { Admin, TUNING_LS_KEY } from './adminView.js';
 import { Trading } from './tradingView.js';
+import { Profile } from './profileView.js';
 import { listTrades } from './api.js';
 import { applyLandingVars } from './landingConfig.js';
 import { DOUBLE_TAP_MS, TAP_VS_DRAG_THRESHOLD } from './config.js';
@@ -49,6 +50,7 @@ let activeView = 'landing';
 let landing = null;
 let admin = null;
 let trading = null;
+let profile = null;
 let openingPanel = null;
 let landingPanel = null;
 let panelsLoading = false;
@@ -240,6 +242,20 @@ function exitTrading() {
   enterLanding();
 }
 
+// --- Profil (Overlay) ---
+function enterProfile() {
+  opening.setActive(false);
+  ui.setVisible(false);
+  landing.setActive(false);
+  showPanels('profile'); // Tuning-Panels im Profil ausblenden
+  profile.open();
+}
+
+function exitProfile() {
+  profile.hide();
+  enterLanding();
+}
+
 async function init() {
   start();
   await cardStack.loadTemplate(); // Karten-Rohling vorladen
@@ -263,6 +279,8 @@ async function init() {
     // Trading-Tab springen, falls man gerade woanders ist.
     onNotificationClick: () => { if (activeView !== 'trading') enterTrading(); },
   });
+  // Profil-View (versteckt, bis geöffnet).
+  profile = new Profile({ onClose: () => exitProfile() });
 
   // Landing aufbauen + anzeigen (Default-View).
   landing = new Landing({
@@ -278,6 +296,7 @@ async function init() {
   };
   landing.onOpenAdmin = () => enterAdmin();
   landing.onOpenTrading = () => enterTrading();
+  landing.onOpenProfile = () => enterProfile();
   await landing.build();
   landing.setActive(true);
 
