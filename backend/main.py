@@ -227,13 +227,9 @@ def profile_stats(request: Request) -> dict:
     user_id = require_user(request)
     with db.connection() as conn:
         row = conn.execute(
-            "SELECT packs_opened, single_opened FROM user_stats WHERE user_id = ?",
-            (user_id,),
+            "SELECT packs_opened FROM user_stats WHERE user_id = ?", (user_id,)
         ).fetchone()
-    return {
-        "packs_opened": row["packs_opened"] if row else 0,
-        "single_opened": row["single_opened"] if row else 0,
-    }
+    return {"packs_opened": row["packs_opened"] if row else 0}
 
 
 # =====================================================================
@@ -375,7 +371,6 @@ def admin_users(request: Request) -> dict:
                    au.last_login AS last_login,
                    COALESCE(h.count, 0) AS hourglasses,
                    COALESCE(s.packs_opened, 0) AS packs_opened,
-                   COALESCE(s.single_opened, 0) AS single_opened,
                    COALESCE((SELECT COUNT(*) FROM user_cards uc
                              WHERE uc.user_id = i.user_id AND uc.count > 0), 0) AS card_count
             FROM ids i
@@ -385,12 +380,27 @@ def admin_users(request: Request) -> dict:
             ORDER BY au.last_login DESC NULLS LAST, i.user_id
             """
         ).fetchall()
+        # Per-Pack-Zähler je User: {user_id: {pack_id: opened}}
+        pack_rows = conn.execute(
+            "SELECT user_id, pack_id, opened FROM user_pack_stats WHERE opened > 0"
+        ).fetchall()
+        pack_stats: dict[str, dict[str, int]] = {}
+        for pr in pack_rows:
+            pack_stats.setdefault(pr["user_id"], {})[pr["pack_id"]] = pr["opened"]
+        # Globale Pack-Liste (für das Admin-Dropdown), set-übergreifend.
+        packs = [
+            {"pack_id": p["pack_id"], "name": p["name"], "set_id": p["set_id"]}
+            for p in conn.execute(
+                "SELECT pack_id, name, set_id FROM packs ORDER BY set_id, pack_id"
+            ).fetchall()
+        ]
     users = []
     for r in rows:
         u = dict(r)
         u["avatar_url"] = avatar_url(u["user_id"], u.pop("avatar"))
+        u["pack_stats"] = pack_stats.get(u["user_id"], {})
         users.append(u)
-    return {"users": users}
+    return {"users": users, "packs": packs}
 
 
 @app.get("/api/admin/user-cards")
@@ -405,45 +415,61 @@ def admin_user_cards(request: Request, user_id: str) -> dict:
     return {"user_id": user_id, "cards": {r["card_id"]: r["count"] for r in rows}}
 
 
-# Whitelist der setzbaren Statistik-Zähler (Spaltennamen — gegen SQL-Injection).
-_STAT_COUNTERS = {"packs_opened", "single_opened"}
-
-
 class AdminPacksSetRequest(BaseModel):
     user_id: str
-    counter: str = "packs_opened"  # 'packs_opened' (alle) | 'single_opened' (Einzel)
-    value: int = 0                 # Zielwert (>= 0); 0 = zurücksetzen
+    counter: str = "all"  # 'all' = Gesamt-Zähler | sonst eine pack_id (Per-Pack)
+    value: int = 0        # Zielwert (>= 0); 0 = zurücksetzen
+
+
+def _user_pack_stats(conn, user_id: str) -> dict:
+    """Aktueller Stand eines Users: Gesamt + Per-Pack (für die Antwort)."""
+    row = conn.execute(
+        "SELECT packs_opened FROM user_stats WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    pack_rows = conn.execute(
+        "SELECT pack_id, opened FROM user_pack_stats WHERE user_id = ? AND opened > 0",
+        (user_id,),
+    ).fetchall()
+    return {
+        "user_id": user_id,
+        "packs_opened": row["packs_opened"] if row else 0,
+        "pack_stats": {r["pack_id"]: r["opened"] for r in pack_rows},
+    }
 
 
 @app.post("/api/admin/packs-set")
 def admin_packs_set(req: AdminPacksSetRequest, request: Request) -> dict:
-    """Einen Statistik-Zähler eines Users absolut setzen (Zielwert, >= 0).
+    """Pack-Zähler eines Users absolut setzen (Zielwert, >= 0).
 
-    counter wählt den Zähler: 'packs_opened' (alle geöffneten Booster) oder
-    'single_opened' (nur Einzel-Booster). value = 0 setzt zurück.
+    counter == 'all' setzt den Gesamt-Zähler (user_stats.packs_opened); jede andere
+    Angabe wird als pack_id verstanden und setzt den Per-Pack-Zähler. value = 0 = reset.
     """
     require_admin(request)
-    if req.counter not in _STAT_COUNTERS:
-        raise HTTPException(status_code=400, detail=f"Unbekannter Zähler: {req.counter}")
     value = max(0, int(req.value))
-    col = req.counter  # aus Whitelist — sicher als Spaltenname zu interpolieren
     with db.connection() as conn:
-        conn.execute(
-            f"INSERT INTO user_stats (user_id, {col}, updated_at) "
-            "VALUES (?, ?, datetime('now')) "
-            f"ON CONFLICT(user_id) DO UPDATE SET {col} = excluded.{col}, "
-            "updated_at = datetime('now')",
-            (req.user_id, value),
-        )
-        row = conn.execute(
-            "SELECT packs_opened, single_opened FROM user_stats WHERE user_id = ?",
-            (req.user_id,),
-        ).fetchone()
-    return {
-        "user_id": req.user_id,
-        "packs_opened": row["packs_opened"] if row else 0,
-        "single_opened": row["single_opened"] if row else 0,
-    }
+        if req.counter == "all":
+            conn.execute(
+                "INSERT INTO user_stats (user_id, packs_opened, updated_at) "
+                "VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(user_id) DO UPDATE SET packs_opened = excluded.packs_opened, "
+                "updated_at = datetime('now')",
+                (req.user_id, value),
+            )
+        else:
+            exists = conn.execute(
+                "SELECT 1 FROM packs WHERE pack_id = ?", (req.counter,)
+            ).fetchone()
+            if not exists:
+                raise HTTPException(status_code=400, detail=f"Unbekanntes Pack: {req.counter}")
+            conn.execute(
+                "INSERT INTO user_pack_stats (user_id, pack_id, opened, updated_at) "
+                "VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(user_id, pack_id) DO UPDATE SET opened = excluded.opened, "
+                "updated_at = datetime('now')",
+                (req.user_id, req.counter, value),
+            )
+        result = _user_pack_stats(conn, req.user_id)
+    return result
 
 
 class AdminHourglassesRequest(BaseModel):

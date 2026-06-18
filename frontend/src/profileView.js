@@ -77,7 +77,6 @@ export class Profile {
   _buildSections(me, stats) {
     return [
       this._statSection('Geöffnete Packs', String(stats.packs_opened ?? 0)),
-      this._statSection('Davon Einzel-Booster', String(stats.single_opened ?? 0)),
       // z.B. später:
       // this._showcaseSection(me),   // Top-10-Karten-Schaukasten
       // this._valueCardsSection(me), // Wertkarten einlösen

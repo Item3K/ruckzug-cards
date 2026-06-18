@@ -115,9 +115,9 @@ export async function adminTakeCard(userId, cardId, count) {
   return postJson('/api/admin/cards/take', { user_id: userId, card_id: cardId, count });
 }
 /**
- * Statistik-Zähler eines Users absolut setzen.
- * counter: 'packs_opened' (alle Booster) | 'single_opened' (nur Einzel).
- * value: Zielwert (>= 0); 0 = zurücksetzen. Antwort enthält beide Zähler.
+ * Pack-Zähler eines Users absolut setzen.
+ * counter: 'all' (Gesamt) | eine pack_id (Per-Pack). value >= 0; 0 = zurücksetzen.
+ * Antwort: { user_id, packs_opened, pack_stats: { pack_id: opened } }.
  */
 export async function adminSetPacks(userId, counter, value) {
   return postJson('/api/admin/packs-set', { user_id: userId, counter, value });

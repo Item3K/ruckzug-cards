@@ -122,21 +122,28 @@ def determine_beam_stage(drawn: list[CardDef]) -> str:
 
 
 # --- Statistik (Profil/Quests-Grundlage) -------------------------------------
-def _bump_stats(conn, user_id: str, *, packs: int = 0, single: int = 0) -> None:
+def _bump_stats(conn, user_id: str, pack_id: str, n: int) -> None:
     """Statistik-Zähler hochzählen — im selben Vorgang wie das Würfeln/Verbuchen,
     damit sie nicht umgangen werden können (serverseitig, atomar).
 
-    packs  = alle geöffneten Booster (Einzel +1, x10 +count).
-    single = nur Einzel-Booster (+1 je Einzelöffnung; x10 lässt diesen Zähler).
+    Zählt ``n`` geöffnete Booster sowohl auf den Gesamt-Zähler (user_stats) als auch
+    auf den Per-Pack-Zähler (user_pack_stats) für genau ``pack_id``.
     """
     conn.execute(
-        "INSERT INTO user_stats (user_id, packs_opened, single_opened, updated_at) "
-        "VALUES (?, ?, ?, datetime('now')) "
+        "INSERT INTO user_stats (user_id, packs_opened, updated_at) "
+        "VALUES (?, ?, datetime('now')) "
         "ON CONFLICT(user_id) DO UPDATE SET "
         "packs_opened = packs_opened + excluded.packs_opened, "
-        "single_opened = single_opened + excluded.single_opened, "
         "updated_at = datetime('now')",
-        (user_id, packs, single),
+        (user_id, n),
+    )
+    conn.execute(
+        "INSERT INTO user_pack_stats (user_id, pack_id, opened, updated_at) "
+        "VALUES (?, ?, ?, datetime('now')) "
+        "ON CONFLICT(user_id, pack_id) DO UPDATE SET "
+        "opened = opened + excluded.opened, "
+        "updated_at = datetime('now')",
+        (user_id, pack_id, n),
     )
 
 
@@ -181,8 +188,8 @@ def open_pack(user_id: str, pack_id: str, rng: random.Random | None = None) -> d
                 (user_id, card_id, n),
             )
 
-        # e) Pack-Zähler +1 (gesamt + Einzel-Booster), gleiche Transaktion
-        _bump_stats(conn, user_id, packs=1, single=1)
+        # e) Pack-Zähler +1 (gesamt + dieser pack_id), gleiche Transaktion
+        _bump_stats(conn, user_id, pack_id, 1)
 
     # f) Beam-Stufe aus der besten Karte
     beam_stage = determine_beam_stage(drawn)
@@ -259,8 +266,8 @@ def open_pack_multi(user_id: str, pack_id: str, count: int = 10,
                 (user_id, card_id, n),
             )
 
-        # Pack-Zähler +count (nur Gesamt; Einzel-Booster bleibt unberührt)
-        _bump_stats(conn, user_id, packs=count)
+        # Pack-Zähler +count (gesamt + dieser pack_id), gleiche Transaktion
+        _bump_stats(conn, user_id, pack_id, count)
 
     # c) Antwort: pro Päckchen die Karten + eigene Beam-Stufe.
     return {

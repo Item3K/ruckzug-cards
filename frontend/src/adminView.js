@@ -141,6 +141,7 @@ export class Admin {
       return;
     }
     this.users = data.users || [];
+    this.packs = data.packs || [];   // globale Pack-Liste fürs Per-Pack-Dropdown
     this.usersEl.innerHTML = '';
     if (!this.users.length) {
       this.usersEl.appendChild(el('p', 'admin-msg', 'Noch keine User.'));
@@ -169,22 +170,24 @@ export class Admin {
     const cc = el('span', 'admin-pill', `🃏 ${u.card_count}`);
     meta.appendChild(cc);
     u._ccEl = cc; // Karten-Zähler-Pille (wird nach Geben/Nehmen aktualisiert)
+    u.pack_stats = u.pack_stats || {};
     const packsPill = el('span', 'admin-pill', `📦 ${u.packs_opened ?? 0}`);
-    packsPill.title = 'Alle geöffneten Booster (Einzel + x10)';
+    packsPill.title = 'Alle geöffneten Booster (Gesamt über alle Packs)';
     meta.appendChild(packsPill);
-    const singlePill = el('span', 'admin-pill', `🎴 ${u.single_opened ?? 0}`);
-    singlePill.title = 'Nur Einzel-Booster';
-    meta.appendChild(singlePill);
     card.appendChild(meta);
 
-    // Pack-Zähler: Zähler wählen, Wert setzen oder auf 0 zurücksetzen.
+    // Pack-Zähler: Gesamt ODER ein einzelnes Pack wählen, Wert setzen / auf 0.
     const packRow = el('div', 'admin-row');
     const counterSel = el('select', 'admin-input admin-select');
-    const optAll = el('option', null, 'Alle Packs'); optAll.value = 'packs_opened';
-    const optSingle = el('option', null, 'Single-Booster'); optSingle.value = 'single_opened';
-    counterSel.append(optAll, optSingle);
-    const valOf = (counter) => counter === 'single_opened'
-      ? (u.single_opened ?? 0) : (u.packs_opened ?? 0);
+    const optAll = el('option', null, 'Alle Packs (Gesamt)'); optAll.value = 'all';
+    counterSel.appendChild(optAll);
+    for (const p of (this.packs || [])) {
+      const o = el('option', null, p.name || p.pack_id);
+      o.value = p.pack_id;
+      counterSel.appendChild(o);
+    }
+    const valOf = (counter) => counter === 'all'
+      ? (u.packs_opened ?? 0) : (u.pack_stats[counter] ?? 0);
     const packVal = el('input', 'admin-input admin-input-sm');
     packVal.type = 'number';
     packVal.min = '0';
@@ -198,11 +201,11 @@ export class Admin {
       try {
         const r = await adminSetPacks(u.user_id, counterSel.value, value);
         u.packs_opened = r.packs_opened;
-        u.single_opened = r.single_opened;
+        u.pack_stats = r.pack_stats || {};
         packsPill.textContent = `📦 ${r.packs_opened}`;
-        singlePill.textContent = `🎴 ${r.single_opened}`;
         packVal.value = String(valOf(counterSel.value));
-        this._flash(card, 'Pack-Zähler aktualisiert.');
+        const label = counterSel.value === 'all' ? 'Gesamt' : counterSel.options[counterSel.selectedIndex].text;
+        this._flash(card, `Pack-Zähler aktualisiert (${label}).`);
       } catch (e) { this._flash(card, e.message || String(e), true); }
       finally { this._busy(card, false); }
     };
