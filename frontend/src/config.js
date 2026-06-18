@@ -35,11 +35,11 @@ export let PACK_DRAG_SENSITIVITY = 0.015;    // Pack-Dreh-Empfindlichkeit (rad/p
 export let PACK_SPIN_MAX_SPEED = 20;         // rad/s Deckel
 
 // --- Beam -------------------------------------------------------------------
-export let BEAM_RIP_HEIGHT_FACTOR = -0.46;   // Höhe der Beam-Spitze (× Pack-Höhe), negativer = tiefer
-export let BEAM_RIP_X_FACTOR = -0.03;        // horizontaler Versatz (× Pack-Höhe), negativ = links
+export let BEAM_RIP_HEIGHT_FACTOR = -0.2;    // Höhe der Beam-Spitze (× Pack-Höhe), negativer = tiefer
+export let BEAM_RIP_X_FACTOR = 0;            // horizontaler Versatz (× Pack-Höhe), negativ = links
 export let BEAM_INTENSITY = 1.0;             // Multiplikator auf die Beam-Spitzen-Deckkraft
-export let BEAM_SCALE = 1.0;                 // Multiplikator auf die Beam-Größe
-export let BEAM_DURATION = 2.6;              // Sekunden gesamtes Auf-/Abblenden (größer = längeres, sanfteres Ausfaden)
+export let BEAM_SCALE = 0.8;                 // Multiplikator auf die Beam-Größe
+export let BEAM_DURATION = 1;                // Sekunden gesamtes Auf-/Abblenden (größer = längeres, sanfteres Ausfaden)
 
 // --- Stapel-Optik -----------------------------------------------------------
 export let CARD_STACK_DEPTH = 0.04;          // Tiefen-Versatz pro Karte (× Kartenhöhe)
@@ -53,7 +53,7 @@ export let ARROW_COLOR = '#ffffff';          // Tönung des Chevron-Icons (SVG i
 //  STRUKTUR-KONSTANTEN (Kamera/Größen)
 // ============================================================================
 export let CAMERA_FOV = 45;
-export let CAMERA_DISTANCE = 6.0;            // fester Kamera-Abstand (kein Zoom)
+export let CAMERA_DISTANCE = 4.6;            // fester Kamera-Abstand (kein Zoom)
 export let PACK_VIEW_HEIGHT = 3.4;           // Zielhöhe des Packs in Weltunits
 export let CARD_VIEW_HEIGHT = 2.4;           // Zielhöhe einer Karte in Weltunits
 
@@ -64,12 +64,12 @@ export let PACK_FADE_DURATION = 0.22;        // Pack-Ausblenden beim Reveal
 // --- x10-Öffnen (Phase 1: Überflug + Wellen-Aufreißen; Phase 2: Karten) -------
 export let X10_STACK_DEPTH = 0.85;           // Tiefen-Versatz pro Pack im Stapel (Weltunits, nach hinten)
 export let X10_STACK_RISE = 0.5;             // Hoch-Versatz pro Pack (Weltunits) -> Oberkanten der hinteren Packs sichtbar
-export let X10_FLYOVER = 1.8;                // Dauer des Kamera-Überflugs über den Stapel (Phase 1, s)
-export let X10_FLYOVER_OVERSHOOT = 0;        // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen); 0 = endet direkt am letzten Pack
+export let X10_FLYOVER = 2;                  // Dauer des Kamera-Überflugs über den Stapel (Phase 1, s)
+export let X10_FLYOVER_OVERSHOOT = 2.5;      // wie weit der Überflug HINTER das letzte Pack gleitet (in Pack-Abständen); 0 = endet direkt am letzten Pack
 export let X10_RIP_STAGGER = 0.16;           // Versatz zwischen den Aufreiß-Starts (Welle vorne->hinten, s)
 export let X10_HOLD_AFTER_RIP = 0.6;         // Halt am Ende von Phase 1, bevor die Karten beginnen (s)
-export let X10_CAM_DIST = 8.0;               // Abstand der Kamera vor dem Pack (gilt auch VOR dem Überflug)
-export let X10_CAM_ANGLE_DEG = 8;            // Kamera-Neigung (Pitch) in Grad — Drehung um die EIGENE Achse (Pivot in der Kamera, wie Blender); 0 = geradeaus, größer = nach unten
+export let X10_CAM_DIST = 6;                 // Abstand der Kamera vor dem Pack (gilt auch VOR dem Überflug)
+export let X10_CAM_ANGLE_DEG = 0;            // Kamera-Neigung (Pitch) in Grad — Drehung um die EIGENE Achse (Pivot in der Kamera, wie Blender); 0 = geradeaus, größer = nach unten
 export let X10_CAM_LOOK_Y = 0.4;             // Kamera-Höhe über der Pack-Position
 export let X10_CAM_MOVE = 0.6;               // Dauer des Kamera-Übergangs Stapel-Aufsicht -> Karten-Frontalsicht (s)
 
