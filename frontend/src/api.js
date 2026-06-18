@@ -114,3 +114,7 @@ export async function adminGiveCard(userId, cardId, count) {
 export async function adminTakeCard(userId, cardId, count) {
   return postJson('/api/admin/cards/take', { user_id: userId, card_id: cardId, count });
 }
+/** Pack-Zähler eines Users auf 0 zurücksetzen. */
+export async function adminResetPacks(userId) {
+  return postJson('/api/admin/packs-reset', { user_id: userId });
+}

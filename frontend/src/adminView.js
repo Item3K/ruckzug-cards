@@ -10,7 +10,7 @@
 
 import {
   getMe, adminListUsers, adminUserCards,
-  adminSetHourglasses, adminGiveCard, adminTakeCard,
+  adminSetHourglasses, adminGiveCard, adminTakeCard, adminResetPacks,
 } from './api.js';
 import { loadAllSets } from './setLoader.js';
 
@@ -171,7 +171,25 @@ export class Admin {
     const cc = el('span', 'admin-pill', `🃏 ${u.card_count}`);
     meta.appendChild(cc);
     u._ccEl = cc; // Karten-Zähler-Pille (wird nach Geben/Nehmen aktualisiert)
+    const packsPill = el('span', 'admin-pill', `📦 ${u.packs_opened ?? 0}`);
+    meta.appendChild(packsPill);
     card.appendChild(meta);
+
+    // Pack-Zähler zurücksetzen.
+    const packRow = el('div', 'admin-row');
+    const resetBtn = el('button', 'admin-btn admin-btn-warn', 'Pack-Zähler zurücksetzen');
+    resetBtn.addEventListener('click', async () => {
+      this._busy(card, true);
+      try {
+        const r = await adminResetPacks(u.user_id);
+        u.packs_opened = r.packs_opened;
+        packsPill.textContent = `📦 ${r.packs_opened}`;
+        this._flash(card, 'Pack-Zähler zurückgesetzt.');
+      } catch (e) { this._flash(card, e.message || String(e), true); }
+      finally { this._busy(card, false); }
+    });
+    packRow.append(el('span', 'admin-label', 'Pack-Zähler'), resetBtn);
+    card.appendChild(packRow);
 
     // Sanduhren: Betrag + Setzen (absolut) / Addieren (+/-).
     const hgRow = el('div', 'admin-row');

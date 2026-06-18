@@ -370,11 +370,13 @@ def admin_users(request: Request) -> dict:
                    au.avatar AS avatar,
                    au.last_login AS last_login,
                    COALESCE(h.count, 0) AS hourglasses,
+                   COALESCE(s.packs_opened, 0) AS packs_opened,
                    COALESCE((SELECT COUNT(*) FROM user_cards uc
                              WHERE uc.user_id = i.user_id AND uc.count > 0), 0) AS card_count
             FROM ids i
             LEFT JOIN app_users au ON au.user_id = i.user_id
             LEFT JOIN hourglasses h ON h.user_id = i.user_id
+            LEFT JOIN user_stats s ON s.user_id = i.user_id
             ORDER BY au.last_login DESC NULLS LAST, i.user_id
             """
         ).fetchall()
@@ -396,6 +398,24 @@ def admin_user_cards(request: Request, user_id: str) -> dict:
             (user_id,),
         ).fetchall()
     return {"user_id": user_id, "cards": {r["card_id"]: r["count"] for r in rows}}
+
+
+class AdminUserRequest(BaseModel):
+    user_id: str
+
+
+@app.post("/api/admin/packs-reset")
+def admin_packs_reset(req: AdminUserRequest, request: Request) -> dict:
+    """Pack-Zähler eines Users auf 0 zurücksetzen."""
+    require_admin(request)
+    with db.connection() as conn:
+        conn.execute(
+            "INSERT INTO user_stats (user_id, packs_opened, updated_at) "
+            "VALUES (?, 0, datetime('now')) "
+            "ON CONFLICT(user_id) DO UPDATE SET packs_opened = 0, updated_at = datetime('now')",
+            (req.user_id,),
+        )
+    return {"user_id": req.user_id, "packs_opened": 0}
 
 
 class AdminHourglassesRequest(BaseModel):
